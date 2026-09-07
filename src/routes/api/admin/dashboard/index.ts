@@ -3,7 +3,7 @@ import { SuccessResponseSchema } from '../../../../schemas/common.js';
 import { DashboardStatsSchemaResponse } from '../../../../schemas/dashboard.js';
 
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, rbac, dashboardRepository, log } = fastify;
+  const { authenticate, rbac, dashboardRepository } = fastify;
 
   fastify.get(
     '/stats',
@@ -14,14 +14,8 @@ export default async function (fastify: FastifyInstance) {
       }
     },
     async (_request, reply) => {
-      const result = await dashboardRepository.getStats();
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to get dashboard stats');
-        return reply.internalServerError('获取仪表盘数据失败');
-      }
-
-      return reply.success('获取仪表盘数据成功', result.value);
+      const data = await dashboardRepository.getStats();
+      return reply.success('获取仪表盘数据成功', data);
     }
   );
 }

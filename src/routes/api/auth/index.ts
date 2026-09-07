@@ -13,7 +13,8 @@ export default async function (fastify: FastifyInstance) {
     authenticate,
     verificationService,
     usersRepository,
-    sessionRepository
+    sessionRepository,
+    httpErrors
   } = fastify;
 
   fastify.get(
@@ -29,19 +30,25 @@ export default async function (fastify: FastifyInstance) {
     async (request, reply) => {
       const userId = request.sessionData!.userId;
 
-      const userResult = await usersRepository.findById(userId);
-      if (userResult.isErr() || !userResult.value) {
-        fastify.log.error('Failed to fetch user information');
-        return reply.internalServerError('服务器错误');
+      const user = await usersRepository.findById(userId);
+      if (!user) {
+        throw httpErrors.notFound('用户不存在');
       }
 
-      return reply.success('获取用户信息成功', userResult.value);
+      return reply.success('获取用户信息成功', user);
     }
   );
 
   fastify.post<{ Body: SendCodeBody }>(
     '/send-code',
     {
+      // 发送验证码会触发真实邮件，需比全局限流更严格的防滥用限制（防邮件轰炸）
+      config: {
+        rateLimit: {
+          max: 3,
+          timeWindow: '1 minute'
+        }
+      },
       schema: {
         body: SendCodeSchema,
         response: {
@@ -49,19 +56,10 @@ export default async function (fastify: FastifyInstance) {
         }
       }
     },
-    async (request, reply) => {
-      const { email } = request.body;
+    async (_request, reply) => {
+      const { email } = _request.body;
 
-      const sendResult = await verificationService.sendVerificationCode(email);
-
-      if (sendResult.isErr()) {
-        fastify.log.error(
-          { error: sendResult.error },
-          'Failed to send verification code'
-        );
-        return reply.internalServerError('验证码发送失败，请稍后重试');
-      }
-
+      await verificationService.sendVerificationCode(email);
       return reply.success('验证码已发送到您的邮箱');
     }
   );
@@ -80,50 +78,23 @@ export default async function (fastify: FastifyInstance) {
       const { email, code } = request.body;
 
       // 验证验证码
-      const verifyResult = await verificationService.verifyCode(email, code);
-      if (verifyResult.isErr()) {
-        fastify.log.error(
-          { error: verifyResult.error },
-          'Failed to verify code'
-        );
-        return reply.internalServerError('服务器错误');
+      const valid = await verificationService.verifyCode(email, code);
+      if (!valid) {
+        throw httpErrors.badRequest('验证码错误或已过期');
       }
 
-      if (!verifyResult.value) {
-        return reply.badRequest('验证码错误或已过期');
-      }
-
-      // 获取用户信息
-      const userResult = await usersRepository.findOrCreate(email);
-      if (userResult.isErr()) {
-        fastify.log.error(
-          { error: userResult.error },
-          'Failed to find or create user'
-        );
-        return reply.internalServerError('服务器错误');
-      }
-
-      const user = userResult.value;
+      // 获取或创建用户
+      const user = await usersRepository.findOrCreate(email);
 
       // 创建 session
-      const sessionResult = await sessionRepository.createSession(
+      const sessionToken = await sessionRepository.createSession(
         user.id,
         user.email,
         user.status,
         user.role
       );
 
-      if (sessionResult.isErr()) {
-        fastify.log.error(
-          { error: sessionResult.error },
-          'Failed to create session'
-        );
-        return reply.internalServerError('服务器错误');
-      }
-
-      const sessionToken = sessionResult.value;
       const cookieOptions = sessionRepository.getCookieOptions();
-      // 设置 cookie
       reply.setCookie('session', sessionToken, cookieOptions);
 
       return reply.success('登录成功', user);
@@ -144,18 +115,15 @@ export default async function (fastify: FastifyInstance) {
       const sessionToken = request.sessionToken;
 
       if (sessionToken) {
-        const deleteResult =
+        try {
           await sessionRepository.deleteSession(sessionToken);
-        if (deleteResult.isErr()) {
-          fastify.log.warn(
-            { error: deleteResult.error },
-            'Failed to delete session'
-          );
+        } catch (error) {
+          // 登出时删除 session 失败仅记录日志，不影响登出流程
+          fastify.log.warn({ error }, 'Failed to delete session');
         }
       }
 
       reply.clearCookie('session', { path: '/' });
-
       return reply.success('登出成功');
     }
   );

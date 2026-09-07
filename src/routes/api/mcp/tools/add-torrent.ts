@@ -22,19 +22,35 @@ export function registerAddTorrent(
       }
     },
     async ({ uri }) => {
-      const addResult = await qbit.addTorrent(uri);
-      if (addResult.isErr())
+      const result = await qbit.addTorrent(uri);
+      if (result !== 'Ok.') {
         return {
           content: [
-            { type: 'text', text: `添加失败: ${addResult.error.message}` }
+            { type: 'text', text: '添加种子失败，请检查种子链接是否有效' }
           ],
           isError: true
         };
+      }
 
       // 计算 hash 供后续 list_torrents 使用
-      let hash: string;
       try {
-        hash = await qbit.getInfoHash(uri);
+        const hash = await qbit.getInfoHash(uri);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  success: true,
+                  torrentHash: hash,
+                  message: '已添加到下载队列'
+                },
+                null,
+                2
+              )
+            }
+          ]
+        };
       } catch (e: any) {
         return {
           content: [
@@ -45,19 +61,6 @@ export function registerAddTorrent(
           ]
         };
       }
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              { success: true, torrentHash: hash, message: '已添加到下载队列' },
-              null,
-              2
-            )
-          }
-        ]
-      };
     }
   );
 }

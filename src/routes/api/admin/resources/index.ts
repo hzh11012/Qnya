@@ -9,7 +9,7 @@ import { SuccessResponseSchema } from '../../../../schemas/common.js';
 const resourceUrl = 'https://api.animes.garden/resources';
 
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, rbac } = fastify;
+  const { authenticate, rbac, httpErrors } = fastify;
 
   /** 资源列表 */
   fastify.get<{ Querystring: ResourcesListQuery }>(
@@ -41,7 +41,7 @@ export default async function (fastify: FastifyInstance) {
       });
 
       if (!response.ok) {
-        return reply.internalServerError('服务器错误');
+        throw httpErrors.internalServerError('服务器错误');
       }
 
       const data: any = await response.json();

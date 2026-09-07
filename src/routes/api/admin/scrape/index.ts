@@ -11,7 +11,7 @@ import {
 import { mapType, mapMonth } from '../../../../utils/tmdb.js';
 
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, rbac, config, log } = fastify;
+  const { authenticate, rbac, config, log, httpErrors } = fastify;
 
   /** 搜索番剧或电影（multi 搜索，无需指定类型） */
   fastify.get<{ Querystring: ScrapeSearchQuery }>(
@@ -40,7 +40,7 @@ export default async function (fastify: FastifyInstance) {
 
       if (!response.ok) {
         log.error({ status: response.status }, 'search request failed');
-        return reply.internalServerError('搜索失败');
+        throw httpErrors.internalServerError('搜索失败');
       }
 
       const data: any = await response.json();
@@ -104,7 +104,7 @@ export default async function (fastify: FastifyInstance) {
 
       if (!detailRes.ok) {
         log.error({ status: detailRes.status }, 'detail request failed');
-        return reply.internalServerError('获取详情失败');
+        throw httpErrors.internalServerError('获取详情失败');
       }
 
       const detail: any = await detailRes.json();

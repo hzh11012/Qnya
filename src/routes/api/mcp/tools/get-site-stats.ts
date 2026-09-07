@@ -16,14 +16,8 @@ export function registerGetSiteStats(
       inputSchema: {}
     },
     async () => {
-      const result = await dashboardRepository.getStats();
-      if (result.isErr())
-        return {
-          content: [{ type: 'text', text: '获取统计失败' }],
-          isError: true
-        };
+      const d = await dashboardRepository.getStats();
 
-      const d = result.value;
       const summary = {
         content: {
           animeTotal: d.content.animeTotal,

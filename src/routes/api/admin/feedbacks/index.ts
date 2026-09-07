@@ -13,7 +13,7 @@ import {
 } from '../../../../schemas/feedback.js';
 
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, rbac, feedbackRepository, log } = fastify;
+  const { authenticate, rbac, feedbackRepository, httpErrors } = fastify;
 
   /** 获取反馈列表 */
   fastify.get<{ Querystring: FeedbackListQuery }>(
@@ -28,14 +28,8 @@ export default async function (fastify: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      const result = await feedbackRepository.findAll(request.query);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to get feedbacks');
-        return reply.internalServerError('获取反馈列表失败');
-      }
-
-      return reply.success('获取反馈列表成功', result.value);
+      const data = await feedbackRepository.findAll(request.query);
+      return reply.success('获取反馈列表成功', data);
     }
   );
 
@@ -56,22 +50,11 @@ export default async function (fastify: FastifyInstance) {
       const { id } = request.params;
 
       const existing = await feedbackRepository.findById(id);
-      if (existing.isErr()) {
-        log.error({ error: existing.error }, 'Failed to find feedback');
-        return reply.internalServerError('编辑反馈失败');
+      if (!existing) {
+        throw httpErrors.notFound('反馈不存在');
       }
 
-      if (!existing.value) {
-        return reply.notFound('反馈不存在');
-      }
-
-      const result = await feedbackRepository.update(id, request.body);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to update feedback');
-        return reply.internalServerError('编辑反馈失败');
-      }
-
+      await feedbackRepository.update(id, request.body);
       return reply.success('编辑反馈成功');
     }
   );
@@ -91,15 +74,9 @@ export default async function (fastify: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params;
 
-      const result = await feedbackRepository.deleteById(id);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to delete feedback');
-        return reply.internalServerError('删除反馈失败');
-      }
-
-      if (!result.value) {
-        return reply.notFound('反馈不存在');
+      const deleted = await feedbackRepository.deleteById(id);
+      if (!deleted) {
+        throw httpErrors.notFound('反馈不存在');
       }
 
       return reply.success('删除反馈成功');

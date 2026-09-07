@@ -16,20 +16,16 @@ export function registerGetAnime(server: McpServer, fastify: FastifyInstance) {
       }
     },
     async ({ id }) => {
-      const result = await animeRepository.findById(id);
-      if (result.isErr())
-        return {
-          content: [{ type: 'text', text: '查询失败' }],
-          isError: true
-        };
-      if (!result.value)
+      const anime = await animeRepository.findById(id);
+      if (!anime) {
         return {
           content: [{ type: 'text', text: `未找到 ID 为 ${id} 的番剧` }],
           isError: true
         };
+      }
 
       return {
-        content: [{ type: 'text', text: JSON.stringify(result.value, null, 2) }]
+        content: [{ type: 'text', text: JSON.stringify(anime, null, 2) }]
       };
     }
   );

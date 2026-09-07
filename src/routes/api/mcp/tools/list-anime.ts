@@ -48,7 +48,7 @@ export function registerListAnime(server: McpServer, fastify: FastifyInstance) {
       page,
       pageSize
     }) => {
-      const result = await animeRepository.findAll({
+      const { items, total } = await animeRepository.findAll({
         keyword,
         status,
         types,
@@ -60,10 +60,7 @@ export function registerListAnime(server: McpServer, fastify: FastifyInstance) {
         sort: 'createdAt',
         order: 'desc'
       });
-      if (result.isErr())
-        return { content: [{ type: 'text', text: '查询失败' }], isError: true };
 
-      const { items, total } = result.value;
       const simplified = items.map(item => ({
         id: item.id,
         seriesId: item.seriesId,

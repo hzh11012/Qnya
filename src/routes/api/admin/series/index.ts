@@ -14,7 +14,7 @@ import {
 } from '../../../../schemas/series.js';
 
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, rbac, seriesRepository, log } = fastify;
+  const { authenticate, rbac, seriesRepository, httpErrors } = fastify;
 
   /** 创建系列 */
   fastify.post<{ Body: AddSeriesBody }>(
@@ -32,24 +32,11 @@ export default async function (fastify: FastifyInstance) {
       const { name } = request.body;
 
       const existing = await seriesRepository.findByName(name);
-      if (existing.isErr()) {
-        log.error({ error: existing.error }, 'Failed to find series');
-        return reply.internalServerError('创建系列失败');
+      if (existing) {
+        throw httpErrors.conflict('系列已存在');
       }
 
-      if (existing.value) {
-        return reply.conflict('系列已存在');
-      }
-
-      const result = await seriesRepository.create({
-        name
-      });
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to create series');
-        return reply.internalServerError('创建系列失败');
-      }
-
+      await seriesRepository.create({ name });
       return reply.success('创建系列成功');
     }
   );
@@ -67,22 +54,8 @@ export default async function (fastify: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      const { page, pageSize, keyword, sort, order } = request.query;
-
-      const result = await seriesRepository.findAll({
-        page,
-        pageSize,
-        keyword,
-        sort,
-        order
-      });
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to get series');
-        return reply.internalServerError('获取系列列表失败');
-      }
-
-      return reply.success('获取系列列表成功', result.value);
+      const data = await seriesRepository.findAll(request.query);
+      return reply.success('获取系列列表成功', data);
     }
   );
 
@@ -101,21 +74,10 @@ export default async function (fastify: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params;
 
-      const existing = await seriesRepository.findById(id);
-      if (existing.isErr()) {
-        log.error({ error: existing.error }, 'Failed to find series');
-        return reply.internalServerError('删除系列失败');
-      }
-
-      if (!existing.value) {
-        return reply.notFound('系列不存在');
-      }
-
-      const result = await seriesRepository.deleteById(id);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to delete series');
-        return reply.internalServerError('删除系列失败');
+      // 直接删除并检查影响行数，避免多余的一次查询
+      const deleted = await seriesRepository.deleteById(id);
+      if (!deleted) {
+        throw httpErrors.notFound('系列不存在');
       }
 
       return reply.success('删除系列成功');
@@ -133,15 +95,9 @@ export default async function (fastify: FastifyInstance) {
         }
       }
     },
-    async (request, reply) => {
-      const result = await seriesRepository.findAllOptions();
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to get series options');
-        return reply.internalServerError('获取系列选项失败');
-      }
-
-      return reply.success('获取系列选项成功', result.value);
+    async (_request, reply) => {
+      const data = await seriesRepository.findAllOptions();
+      return reply.success('获取系列选项成功', data);
     }
   );
 }

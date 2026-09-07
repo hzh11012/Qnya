@@ -10,7 +10,7 @@ import {
 } from '../../../../schemas/tags.js';
 
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, rbac, tagsRepository, log } = fastify;
+  const { authenticate, rbac, tagsRepository } = fastify;
 
   /** 标签列表 */
   fastify.get<{ Querystring: TagsListQuery }>(
@@ -25,22 +25,8 @@ export default async function (fastify: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      const { page, pageSize, keyword, sort, order } = request.query;
-
-      const result = await tagsRepository.findAll({
-        page,
-        pageSize,
-        keyword,
-        sort,
-        order
-      });
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to get tags');
-        return reply.internalServerError('获取标签列表失败');
-      }
-
-      return reply.success('获取标签列表成功', result.value);
+      const data = await tagsRepository.findAll(request.query);
+      return reply.success('获取标签列表成功', data);
     }
   );
 
@@ -55,15 +41,9 @@ export default async function (fastify: FastifyInstance) {
         }
       }
     },
-    async (request, reply) => {
-      const result = await tagsRepository.findAllOptions();
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to get tags options');
-        return reply.internalServerError('获取标签选项失败');
-      }
-
-      return reply.success('获取标签选项成功', result.value);
+    async (_request, reply) => {
+      const data = await tagsRepository.findAllOptions();
+      return reply.success('获取标签选项成功', data);
     }
   );
 }

@@ -32,21 +32,12 @@ export function registerListTorrents(
       }
     },
     async ({ filter, limit, offset }) => {
-      const result = await qbit.getTorrents({
+      const { items, total } = await qbit.getTorrents({
         filter: filter as any,
         limit: limit ?? 10,
         offset: offset ?? 0
       });
 
-      if (result.isErr())
-        return {
-          content: [
-            { type: 'text', text: `查询失败: ${result.error.message}` }
-          ],
-          isError: true
-        };
-
-      const { items, total } = result.value;
       const simplified = items.map(t => ({
         hash: t.hash,
         name: t.name,

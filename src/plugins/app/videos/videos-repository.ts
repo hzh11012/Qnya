@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
-import { videosTable } from '../../../db/index.js';
-import { toResult } from '../../../utils/result.js';
+import { videosTable, animeTable } from '../../../db/index.js';
 import { and, eq, like, sql } from 'drizzle-orm';
 import type {
   VideoListQuery,
@@ -24,120 +23,115 @@ const createVideosRepository = (fastify: FastifyInstance) => {
   return {
     /** 查询视频列表 */
     async findAll(params: VideoListQuery) {
-      return toResult(
-        (async () => {
-          const { page, pageSize, sort, order, keyword } = params;
+      const { page, pageSize, sort, order, keyword } = params;
 
-          // 构建查询条件
-          const conditions = [];
+      // 构建查询条件
+      const conditions = [];
 
-          if (keyword) {
-            conditions.push(
-              like(videosTable.title, `%${escapeLike(t2s(keyword))}%`)
-            );
-          }
+      if (keyword) {
+        conditions.push(
+          like(videosTable.title, `%${escapeLike(t2s(keyword))}%`)
+        );
+      }
 
-          const whereClause =
-            conditions.length > 0 ? and(...conditions) : undefined;
+      const whereClause =
+        conditions.length > 0 ? and(...conditions) : undefined;
 
-          const [items, countResult] = await Promise.all([
-            db.query.videosTable.findMany({
-              where: whereClause,
-              orderBy: buildOrderBy(videosTable[sort], order, videosTable.id),
-              limit: pageSize,
-              offset: calcOffset(page, pageSize),
-              with: {
-                anime: {
-                  columns: {
-                    name: true,
-                    season: true,
-                    seasonName: true,
-                    cover: true
-                  }
-                }
-              }
-            }),
-            db
-              .select({ count: sql<number>`count(*)` })
-              .from(videosTable)
-              .where(whereClause)
-          ]);
+      const [items, countResult] = await Promise.all([
+        db
+          .select({
+            id: videosTable.id,
+            animeId: videosTable.animeId,
+            title: videosTable.title,
+            episode: videosTable.episode,
+            url: videosTable.url,
+            views: videosTable.views,
+            createdAt: videosTable.createdAt,
+            animeName: animeTable.name,
+            animeSeason: animeTable.season,
+            animeSeasonName: animeTable.seasonName,
+            animeCover: animeTable.cover
+          })
+          .from(videosTable)
+          .leftJoin(animeTable, eq(videosTable.animeId, animeTable.id))
+          .where(whereClause)
+          .orderBy(...buildOrderBy(videosTable[sort], order, videosTable.id))
+          .limit(pageSize)
+          .offset(calcOffset(page, pageSize)),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(videosTable)
+          .where(whereClause)
+      ]);
 
-          return {
-            items: items.map(item => ({
-              ...item,
-              anime: {
-                name: `${item.anime.name}${item.anime.seasonName ? ` ${item.anime.seasonName}` : item.anime.season !== 1 ? ` 第${item.anime.season}季` : ''}`,
-                cover: item.anime.cover
-              }
-            })),
-            total: Number(countResult[0]?.count ?? 0)
-          };
-        })()
-      );
+      return {
+        items: items.map(
+          ({
+            animeName,
+            animeSeason,
+            animeSeasonName,
+            animeCover,
+            ...rest
+          }) => ({
+            ...rest,
+            anime: {
+              name: `${animeName}${animeSeasonName ? ` ${animeSeasonName}` : animeSeason !== 1 ? ` 第${animeSeason}季` : ''}`,
+              cover: animeCover
+            }
+          })
+        ),
+        total: Number(countResult[0]?.count ?? 0)
+      };
     },
 
     /** 根据 ID 查找视频 */
     async findById(id: number) {
-      return toResult(
-        db
-          .select()
-          .from(videosTable)
-          .where(eq(videosTable.id, id))
-          .limit(1)
-          .then(rows => rows[0] ?? null)
-      );
+      const [video] = await db
+        .select()
+        .from(videosTable)
+        .where(eq(videosTable.id, id))
+        .limit(1);
+      return video ?? null;
     },
 
     /** 根据 animeId 和 episode 查找视频 */
     async findByAnimeIdAndEpisode(animeId: number, episode: number) {
-      return toResult(
-        db
-          .select()
-          .from(videosTable)
-          .where(
-            and(
-              eq(videosTable.animeId, animeId),
-              eq(videosTable.episode, episode)
-            )
+      const [video] = await db
+        .select()
+        .from(videosTable)
+        .where(
+          and(
+            eq(videosTable.animeId, animeId),
+            eq(videosTable.episode, episode)
           )
-          .limit(1)
-          .then(rows => rows[0] ?? null)
-      );
+        )
+        .limit(1);
+      return video ?? null;
     },
 
     /** 创建视频 */
     async create(data: AddVideoBody) {
-      return toResult(
-        db
-          .insert(videosTable)
-          .values(data)
-          .returning()
-          .then(rows => rows[0])
-      );
+      const [created] = await db.insert(videosTable).values(data).returning();
+      return created;
     },
 
     /** 更新视频 */
     async update(id: number, data: UpdateVideoBody) {
-      return toResult(
-        db
-          .update(videosTable)
-          .set(data)
-          .where(eq(videosTable.id, id))
-          .returning()
-          .then(rows => rows[0])
-      );
+      const [updated] = await db
+        .update(videosTable)
+        .set(data)
+        .where(eq(videosTable.id, id))
+        .returning();
+      return updated ?? null;
     },
 
     /** 删除视频 */
     async deleteById(id: number) {
-      return toResult(
-        db
-          .delete(videosTable)
-          .where(eq(videosTable.id, id))
-          .returning()
-          .then(rows => rows[0])
-      );
+      const [deleted] = await db
+        .delete(videosTable)
+        .where(eq(videosTable.id, id))
+        .returning();
+      return deleted ?? null;
     }
   };
 };

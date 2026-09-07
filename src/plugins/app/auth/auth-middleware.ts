@@ -39,17 +39,7 @@ const createAuthMiddleware = (fastify: FastifyInstance) => {
       return reply.unauthorized('未登录');
     }
 
-    const sessionResult = await sessionRepository.getSession(sessionToken);
-
-    if (sessionResult.isErr()) {
-      fastify.log.error(
-        { error: sessionResult.error },
-        'Failed to get session'
-      );
-      return reply.internalServerError('服务器错误');
-    }
-
-    const session = sessionResult.value;
+    const session = await sessionRepository.getSession(sessionToken);
 
     if (!session) {
       reply.clearCookie('session', { path: '/' });
@@ -63,15 +53,9 @@ const createAuthMiddleware = (fastify: FastifyInstance) => {
 
     // 自动续签
     if (await sessionRepository.shouldRenew(sessionToken)) {
-      const renewResult = await sessionRepository.renewSession(
-        sessionToken,
-        session
-      );
-
-      if (renewResult.isOk()) {
-        const cookieOptions = sessionRepository.getCookieOptions();
-        reply.setCookie('session', sessionToken, cookieOptions);
-      }
+      await sessionRepository.renewSession(sessionToken, session);
+      const cookieOptions = sessionRepository.getCookieOptions();
+      reply.setCookie('session', sessionToken, cookieOptions);
     }
 
     request.sessionData = session;

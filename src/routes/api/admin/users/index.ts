@@ -11,8 +11,14 @@ import {
 } from '../../../../schemas/users.js';
 
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, rbac, usersRepository, sessionRepository, log } =
-    fastify;
+  const {
+    authenticate,
+    rbac,
+    usersRepository,
+    sessionRepository,
+    log,
+    httpErrors
+  } = fastify;
 
   /** 用户列表 */
   fastify.get<{ Querystring: UserListQuery }>(
@@ -27,25 +33,8 @@ export default async function (fastify: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      const { page, pageSize, keyword, role, status, sort, order } =
-        request.query;
-
-      const result = await usersRepository.findAll({
-        page,
-        pageSize,
-        keyword,
-        role,
-        status,
-        sort,
-        order
-      });
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to get users');
-        return reply.internalServerError('获取用户列表失败');
-      }
-
-      return reply.success('获取用户列表成功', result.value);
+      const data = await usersRepository.findAll(request.query);
+      return reply.success('获取用户列表成功', data);
     }
   );
 
@@ -64,46 +53,29 @@ export default async function (fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const { id } = request.params;
-      const { role, status } = request.body;
+      const { name, role, status, avatar } = request.body;
 
       const existing = await usersRepository.findById(id);
-      if (existing.isErr()) {
-        log.error({ error: existing.error }, 'Failed to find user');
-        return reply.internalServerError('更新用户失败');
+      if (!existing) {
+        throw httpErrors.notFound('用户不存在');
       }
 
-      if (!existing.value) {
-        return reply.notFound('用户不存在');
-      }
+      await usersRepository.update(id, { name, role, status, avatar });
 
-      const result = await usersRepository.update(id, request.body);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to update user');
-        return reply.internalServerError('更新用户失败');
-      }
-
-      // 同步更新 session 中的角色和状态
+      // 同步更新 session 中的角色和状态（失败仅记录日志，不影响主流程）
       if (role !== undefined) {
-        const roleResult = await sessionRepository.refreshUserSessionsRole(
-          id,
-          role
-        );
-        if (roleResult.isErr()) {
-          log.error({ error: roleResult.error }, 'Failed to sync session role');
+        try {
+          await sessionRepository.refreshUserSessionsRole(id, role);
+        } catch (error) {
+          log.error({ error }, 'Failed to sync session role');
         }
       }
 
       if (status !== undefined) {
-        const statusResult = await sessionRepository.refreshUserSessionsStatus(
-          id,
-          status
-        );
-        if (statusResult.isErr()) {
-          log.error(
-            { error: statusResult.error },
-            'Failed to sync session status'
-          );
+        try {
+          await sessionRepository.refreshUserSessionsStatus(id, status);
+        } catch (error) {
+          log.error({ error }, 'Failed to sync session status');
         }
       }
 

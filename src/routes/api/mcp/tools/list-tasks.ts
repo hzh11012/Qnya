@@ -23,7 +23,7 @@ export function registerListTasks(server: McpServer, fastify: FastifyInstance) {
       }
     },
     async ({ status, keyword, page, pageSize }) => {
-      const result = await tasksRepository.findAll({
+      const { items, total } = await tasksRepository.findAll({
         status,
         keyword,
         page: page ?? 1,
@@ -32,13 +32,6 @@ export function registerListTasks(server: McpServer, fastify: FastifyInstance) {
         order: 'desc'
       });
 
-      if (result.isErr())
-        return {
-          content: [{ type: 'text', text: '查询失败' }],
-          isError: true
-        };
-
-      const { items, total } = result.value;
       const simplified = items.map(t => ({
         id: t.id,
         filename: t.filename,

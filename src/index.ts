@@ -1,4 +1,7 @@
 import { buildApp } from './config/app.js';
+import { ensureUtf8Console } from './bootstrap/console.js';
+
+ensureUtf8Console();
 
 const start = async () => {
   const app = await buildApp();

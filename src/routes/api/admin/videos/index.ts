@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { isUniqueViolation } from '../../../../utils/db-errors.js';
 import { SuccessResponseSchema } from '../../../../schemas/common.js';
 import {
   type VideoListQuery,
@@ -15,7 +16,7 @@ import {
 } from '../../../../schemas/videos.js';
 
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, rbac, videosRepository, animeRepository, log } =
+  const { authenticate, rbac, videosRepository, animeRepository, httpErrors } =
     fastify;
 
   /** 创建剧集 */
@@ -33,36 +34,28 @@ export default async function (fastify: FastifyInstance) {
     async (request, reply) => {
       const { animeId, episode } = request.body;
 
-      const existingAnime = await animeRepository.findById(animeId);
-      if (existingAnime.isErr()) {
-        log.error({ error: existingAnime.error }, 'Failed to find anime');
-        return reply.internalServerError('创建剧集失败');
-      }
-
-      if (!existingAnime.value) {
-        return reply.notFound('动漫不存在');
+      const anime = await animeRepository.findById(animeId);
+      if (!anime) {
+        throw httpErrors.notFound('动漫不存在');
       }
 
       const existingVideo = await videosRepository.findByAnimeIdAndEpisode(
         animeId,
         episode
       );
-      if (existingVideo.isErr()) {
-        log.error({ error: existingVideo.error }, 'Failed to find video');
-        return reply.internalServerError('创建剧集失败');
+      if (existingVideo) {
+        throw httpErrors.conflict('该番剧已存在相同集数的剧集');
       }
 
-      if (existingVideo.value) {
-        return reply.conflict('该番剧已存在相同集数的剧集');
+      try {
+        await videosRepository.create(request.body);
+      } catch (error) {
+        // 兼发竞态兑底：预检查通过后仍可能撞唯一索引
+        if (isUniqueViolation(error)) {
+          throw httpErrors.conflict('该番剧已存在相同集数的剧集');
+        }
+        throw error;
       }
-
-      const result = await videosRepository.create(request.body);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to create video');
-        return reply.internalServerError('创建剧集失败');
-      }
-
       return reply.success('创建剧集成功');
     }
   );
@@ -80,14 +73,8 @@ export default async function (fastify: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      const result = await videosRepository.findAll(request.query);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to get videos');
-        return reply.internalServerError('获取剧集列表失败');
-      }
-
-      return reply.success('获取剧集列表成功', result.value);
+      const data = await videosRepository.findAll(request.query);
+      return reply.success('获取剧集列表成功', data);
     }
   );
 
@@ -108,32 +95,20 @@ export default async function (fastify: FastifyInstance) {
       const { id } = request.params;
 
       const existingVideo = await videosRepository.findById(id);
-      if (existingVideo.isErr()) {
-        log.error({ error: existingVideo.error }, 'Failed to find video');
-        return reply.internalServerError('编辑剧集失败');
-      }
-
-      if (!existingVideo.value) {
-        return reply.notFound('剧集不存在');
+      if (!existingVideo) {
+        throw httpErrors.notFound('剧集不存在');
       }
 
       if (request.body.animeId !== undefined) {
-        const existingAnime = await animeRepository.findById(
-          request.body.animeId
-        );
-        if (existingAnime.isErr()) {
-          log.error({ error: existingAnime.error }, 'Failed to find anime');
-          return reply.internalServerError('编辑剧集失败');
-        }
-
-        if (!existingAnime.value) {
-          return reply.notFound('动漫不存在');
+        const anime = await animeRepository.findById(request.body.animeId);
+        if (!anime) {
+          throw httpErrors.notFound('动漫不存在');
         }
       }
 
       // 检查是否有重复的 animeId + episode 组合
-      const checkAnimeId = request.body.animeId ?? existingVideo.value.animeId;
-      const checkEpisode = request.body.episode ?? existingVideo.value.episode;
+      const checkAnimeId = request.body.animeId ?? existingVideo.animeId;
+      const checkEpisode = request.body.episode ?? existingVideo.episode;
 
       // 只有当 animeId 或 episode 发生变化时才检查重复
       if (
@@ -144,23 +119,20 @@ export default async function (fastify: FastifyInstance) {
           checkAnimeId,
           checkEpisode
         );
-        if (duplicateVideo.isErr()) {
-          log.error({ error: duplicateVideo.error }, 'Failed to find video');
-          return reply.internalServerError('编辑剧集失败');
-        }
-
-        if (duplicateVideo.value && duplicateVideo.value.id !== id) {
-          return reply.conflict('该动漫已存在相同集数的剧集');
+        if (duplicateVideo && duplicateVideo.id !== id) {
+          throw httpErrors.conflict('该动漫已存在相同集数的剧集');
         }
       }
 
-      const result = await videosRepository.update(id, request.body);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to update video');
-        return reply.internalServerError('编辑剧集失败');
+      try {
+        await videosRepository.update(id, request.body);
+      } catch (error) {
+        // 兼发竞态兑底：修改集数时可能撞唯一索引
+        if (isUniqueViolation(error)) {
+          throw httpErrors.conflict('该番剧已存在相同集数的剧集');
+        }
+        throw error;
       }
-
       return reply.success('编辑剧集成功');
     }
   );
@@ -180,15 +152,9 @@ export default async function (fastify: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params;
 
-      const result = await videosRepository.deleteById(id);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to delete video');
-        return reply.internalServerError('删除剧集失败');
-      }
-
-      if (!result.value) {
-        return reply.notFound('剧集不存在');
+      const deleted = await videosRepository.deleteById(id);
+      if (!deleted) {
+        throw httpErrors.notFound('剧集不存在');
       }
 
       return reply.success('删除剧集成功');

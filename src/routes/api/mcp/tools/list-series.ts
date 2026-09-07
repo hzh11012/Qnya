@@ -19,17 +19,15 @@ export function registerListSeries(
       }
     },
     async ({ keyword, page, pageSize }) => {
-      const result = await seriesRepository.findAll({
+      const data = await seriesRepository.findAll({
         keyword,
         page: page ?? 1,
         pageSize: pageSize ?? 20,
         sort: 'createdAt',
         order: 'desc'
       });
-      if (result.isErr())
-        return { content: [{ type: 'text', text: '查询失败' }], isError: true };
       return {
-        content: [{ type: 'text', text: JSON.stringify(result.value, null, 2) }]
+        content: [{ type: 'text', text: JSON.stringify(data, null, 2) }]
       };
     }
   );

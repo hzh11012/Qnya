@@ -1,8 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
-import { seriesTable } from '../../../db/index.js';
-import { toResult } from '../../../utils/result.js';
-import { eq, like, sql } from 'drizzle-orm';
+import { seriesTable, animeTable } from '../../../db/index.js';
+import { eq, inArray, like, sql } from 'drizzle-orm';
 import { SeriesListQuery, AddSeriesBody } from '../../../schemas/series.js';
 import { escapeLike } from '../../../utils/like.js';
 import { calcOffset, buildOrderBy } from '../../../utils/paginated-query.js';
@@ -20,97 +19,104 @@ const createSeriesRepository = (fastify: FastifyInstance) => {
   return {
     /** 根据 ID 查找 */
     async findById(id: number) {
-      return toResult(
-        db
-          .select()
-          .from(seriesTable)
-          .where(eq(seriesTable.id, id))
-          .limit(1)
-          .then(series => series[0])
-      );
+      const [series] = await db
+        .select()
+        .from(seriesTable)
+        .where(eq(seriesTable.id, id))
+        .limit(1);
+      return series ?? null;
     },
 
     /** 根据名称查找 */
     async findByName(name: string) {
-      return toResult(
-        db
-          .select()
-          .from(seriesTable)
-          .where(eq(seriesTable.name, name))
-          .limit(1)
-          .then(series => series[0])
-      );
+      const [series] = await db
+        .select()
+        .from(seriesTable)
+        .where(eq(seriesTable.name, name))
+        .limit(1);
+      return series ?? null;
     },
 
     /** 创建系列 */
     async create(series: AddSeriesBody) {
-      return toResult(
-        db
-          .insert(seriesTable)
-          .values(series)
-          .returning()
-          .then(series => series[0])
-      );
+      const [created] = await db.insert(seriesTable).values(series).returning();
+      return created;
     },
 
     /** 查询列表 */
     async findAll(params: SeriesListQuery) {
-      return toResult(
-        (async () => {
-          const { page, pageSize, keyword, sort, order } = params;
+      const { page, pageSize, keyword, sort, order } = params;
 
-          const whereClause = keyword
-            ? like(seriesTable.name, `%${escapeLike(t2s(keyword))}%`)
-            : undefined;
+      const whereClause = keyword
+        ? like(seriesTable.name, `%${escapeLike(t2s(keyword))}%`)
+        : undefined;
 
-          const [items, countResult] = await Promise.all([
-            db.query.seriesTable.findMany({
-              where: whereClause,
-              orderBy: buildOrderBy(seriesTable[sort], order, seriesTable.id),
-              limit: pageSize,
-              offset: calcOffset(page, pageSize),
-              with: {
-                anime: {
-                  columns: {
-                    id: true,
-                    name: true,
-                    season: true
-                  }
-                }
-              }
-            }),
-            db
-              .select({ count: sql<number>`count(*)` })
-              .from(seriesTable)
-              .where(whereClause)
-          ]);
+      const [series, countResult] = await Promise.all([
+        db
+          .select({
+            id: seriesTable.id,
+            name: seriesTable.name,
+            createdAt: seriesTable.createdAt
+          })
+          .from(seriesTable)
+          .where(whereClause)
+          .orderBy(...buildOrderBy(seriesTable[sort], order, seriesTable.id))
+          .limit(pageSize)
+          .offset(calcOffset(page, pageSize)),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(seriesTable)
+          .where(whereClause)
+      ]);
 
-          return { items, total: Number(countResult[0]?.count ?? 0) };
-        })()
-      );
+      // 分离查询：批量获取当前页系列下的番剧（一对多，避免 lateral join）
+      const seriesIds = series.map(s => s.id);
+      const animeRows =
+        seriesIds.length > 0
+          ? await db
+              .select({
+                id: animeTable.id,
+                name: animeTable.name,
+                season: animeTable.season,
+                seriesId: animeTable.seriesId
+              })
+              .from(animeTable)
+              .where(inArray(animeTable.seriesId, seriesIds))
+          : [];
+
+      const animeBySeries = new Map<number, typeof animeRows>();
+      for (const a of animeRows) {
+        const list = animeBySeries.get(a.seriesId) ?? [];
+        list.push(a);
+        animeBySeries.set(a.seriesId, list);
+      }
+
+      return {
+        items: series.map(s => ({
+          ...s,
+          anime: animeBySeries.get(s.id) ?? []
+        })),
+        total: Number(countResult[0]?.count ?? 0)
+      };
     },
 
     /** 删除系列 */
     async deleteById(id: number) {
-      return toResult(
-        db
-          .delete(seriesTable)
-          .where(eq(seriesTable.id, id))
-          .returning()
-          .then(series => series[0])
-      );
+      const [deleted] = await db
+        .delete(seriesTable)
+        .where(eq(seriesTable.id, id))
+        .returning();
+      return deleted ?? null;
     },
 
     /** 查询选项 */
     async findAllOptions() {
-      return toResult(
-        db
-          .select({
-            label: seriesTable.name,
-            value: sql<string>`${seriesTable.id}::text`
-          })
-          .from(seriesTable)
-      );
+      return db
+        .select({
+          label: seriesTable.name,
+          value: sql<string>`${seriesTable.id}::text`
+        })
+        .from(seriesTable);
     }
   };
 };

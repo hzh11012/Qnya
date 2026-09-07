@@ -1,4 +1,11 @@
-import { index, integer, pgTable, real, varchar } from 'drizzle-orm/pg-core';
+import {
+  index,
+  integer,
+  pgTable,
+  real,
+  unique,
+  varchar
+} from 'drizzle-orm/pg-core';
 import { timestamps } from '../columns.helpers.js';
 import { animeTable } from '../anime/index.js';
 
@@ -24,6 +31,8 @@ export const videosTable = pgTable(
   },
   table => [
     index('videos_anime_id_idx').on(table.animeId),
-    index('videos_views_idx').on(table.views)
+    index('videos_views_idx').on(table.views),
+    // 同一番剧下每集唯一，防止并发插入重复剧集
+    unique('videos_anime_episode_unique').on(table.animeId, table.episode)
   ]
 );

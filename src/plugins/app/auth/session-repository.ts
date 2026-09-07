@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 import { randomBytes } from 'node:crypto';
-import { err, toResult } from '../../../utils/result.js';
 
 export interface SessionData {
   userId: number;
@@ -85,35 +84,27 @@ const createSessionRepository = (fastify: FastifyInstance) => {
       const key = this.buildKey(token);
       const userIndexKey = this.buildUserIndexKey(userId);
 
-      return toResult(
-        (async () => {
-          const pipeline = redis.pipeline();
-          pipeline.setex(key, maxAgeSeconds, JSON.stringify(sessionData));
-          pipeline.zadd(userIndexKey, expiresAt, token);
-          pipeline.zremrangebyscore(userIndexKey, '-inf', now);
-          await pipeline.exec();
-          return token;
-        })()
-      );
+      const pipeline = redis.pipeline();
+      pipeline.setex(key, maxAgeSeconds, JSON.stringify(sessionData));
+      pipeline.zadd(userIndexKey, expiresAt, token);
+      pipeline.zremrangebyscore(userIndexKey, '-inf', now);
+      await pipeline.exec();
+      return token;
     },
 
     /**
      * 获取 session
+     *
+     * token 格式无效或不存在时返回 null。
      * @param token 会话Token
      */
-    async getSession(token: string) {
-      if (!this.isValidToken(token)) {
-        return err(new Error('Invalid token'));
-      }
+    async getSession(token: string): Promise<SessionData | null> {
+      if (!this.isValidToken(token)) return null;
 
       const key = this.buildKey(token);
-
-      return toResult(
-        redis.get(key).then(data => {
-          if (!data) return null;
-          return JSON.parse(data) as SessionData;
-        })
-      );
+      const data = await redis.get(key);
+      if (!data) return null;
+      return JSON.parse(data) as SessionData;
     },
 
     /**
@@ -122,9 +113,7 @@ const createSessionRepository = (fastify: FastifyInstance) => {
      * @param sessionData 会话数据
      */
     async renewSession(token: string, sessionData: SessionData) {
-      if (!this.isValidToken(token)) {
-        return err(new Error('Invalid token'));
-      }
+      if (!this.isValidToken(token)) return;
 
       const now = Date.now();
       const maxAgeSeconds = Math.floor(config.SESSION_MAX_AGE / 1000);
@@ -135,19 +124,11 @@ const createSessionRepository = (fastify: FastifyInstance) => {
       const sessionKey = this.buildKey(token);
       const userIndexKey = this.buildUserIndexKey(sessionData.userId);
 
-      return toResult(
-        (async () => {
-          const pipeline = redis.pipeline();
-          pipeline.setex(
-            sessionKey,
-            maxAgeSeconds,
-            JSON.stringify(sessionData)
-          );
-          pipeline.zadd(userIndexKey, newExpiresAt, token);
-          pipeline.zremrangebyscore(userIndexKey, '-inf', now);
-          await pipeline.exec();
-        })()
-      );
+      const pipeline = redis.pipeline();
+      pipeline.setex(sessionKey, maxAgeSeconds, JSON.stringify(sessionData));
+      pipeline.zadd(userIndexKey, newExpiresAt, token);
+      pipeline.zremrangebyscore(userIndexKey, '-inf', now);
+      await pipeline.exec();
     },
 
     /**
@@ -167,28 +148,20 @@ const createSessionRepository = (fastify: FastifyInstance) => {
      * @param token 会话Token
      */
     async deleteSession(token: string) {
-      if (!this.isValidToken(token)) {
-        return err(new Error('Invalid token'));
-      }
+      if (!this.isValidToken(token)) return;
 
-      const sessionResult = await this.getSession(token);
+      const session = await this.getSession(token);
       const key = this.buildKey(token);
 
-      return toResult(
-        (async () => {
-          const pipeline = redis.pipeline();
-          pipeline.del(key);
+      const pipeline = redis.pipeline();
+      pipeline.del(key);
 
-          if (sessionResult.isOk() && sessionResult.value) {
-            const userIndexKey = this.buildUserIndexKey(
-              sessionResult.value.userId
-            );
-            pipeline.zrem(userIndexKey, token);
-          }
+      if (session) {
+        const userIndexKey = this.buildUserIndexKey(session.userId);
+        pipeline.zrem(userIndexKey, token);
+      }
 
-          await pipeline.exec();
-        })()
-      );
+      await pipeline.exec();
     },
 
     /**
@@ -198,18 +171,14 @@ const createSessionRepository = (fastify: FastifyInstance) => {
     async deleteAllUserSessions(userId: number) {
       const userIndexKey = this.buildUserIndexKey(userId);
 
-      return toResult(
-        (async () => {
-          const tokens = await redis.zrange(userIndexKey, 0, -1);
+      const tokens = await redis.zrange(userIndexKey, 0, -1);
 
-          if (tokens.length > 0) {
-            const keys = tokens.map(t => this.buildKey(t));
-            await redis.del(...keys);
-          }
+      if (tokens.length > 0) {
+        const keys = tokens.map(t => this.buildKey(t));
+        await redis.del(...keys);
+      }
 
-          await redis.del(userIndexKey);
-        })()
-      );
+      await redis.del(userIndexKey);
     },
 
     /**
@@ -236,7 +205,7 @@ const createSessionRepository = (fastify: FastifyInstance) => {
         getPipeline.ttl(key);
       }
       const results = await getPipeline.exec();
-      if (!results) return;
+      if (!results) return 0;
 
       // 批量更新
       const updatePipeline = redis.pipeline();
@@ -269,11 +238,9 @@ const createSessionRepository = (fastify: FastifyInstance) => {
      * @param status 状态
      */
     async refreshUserSessionsStatus(userId: number, status: boolean) {
-      return toResult(
-        this.batchUpdateUserSessions(userId, session => {
-          session.status = status;
-        })
-      );
+      return this.batchUpdateUserSessions(userId, session => {
+        session.status = status;
+      });
     },
 
     /**
@@ -282,11 +249,9 @@ const createSessionRepository = (fastify: FastifyInstance) => {
      * @param role 角色
      */
     async refreshUserSessionsRole(userId: number, role: string) {
-      return toResult(
-        this.batchUpdateUserSessions(userId, session => {
-          session.role = role;
-        })
-      );
+      return this.batchUpdateUserSessions(userId, session => {
+        session.role = role;
+      });
     },
 
     /**

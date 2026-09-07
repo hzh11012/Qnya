@@ -9,7 +9,7 @@ import {
 } from '../../../../schemas/histories.js';
 
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, rbac, historiesRepository, log } = fastify;
+  const { authenticate, rbac, historiesRepository, httpErrors } = fastify;
 
   /** 获取观看记录列表 */
   fastify.get<{ Querystring: HistoryListQuery }>(
@@ -24,14 +24,8 @@ export default async function (fastify: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      const result = await historiesRepository.findAll(request.query);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to get histories');
-        return reply.internalServerError('获取观看记录列表失败');
-      }
-
-      return reply.success('获取观看记录列表成功', result.value);
+      const data = await historiesRepository.findAll(request.query);
+      return reply.success('获取观看记录列表成功', data);
     }
   );
 
@@ -50,15 +44,9 @@ export default async function (fastify: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params;
 
-      const result = await historiesRepository.deleteById(id);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to delete history');
-        return reply.internalServerError('删除观看记录失败');
-      }
-
-      if (!result.value) {
-        return reply.notFound('观看记录不存在');
+      const deleted = await historiesRepository.deleteById(id);
+      if (!deleted) {
+        throw httpErrors.notFound('观看记录不存在');
       }
 
       return reply.success('删除观看记录成功');

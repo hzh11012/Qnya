@@ -9,7 +9,7 @@ import {
 } from '../../../../schemas/collections.js';
 
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, rbac, collectionsRepository, log } = fastify;
+  const { authenticate, rbac, collectionsRepository, httpErrors } = fastify;
 
   /** 获取追番列表 */
   fastify.get<{ Querystring: CollectionListQuery }>(
@@ -24,14 +24,8 @@ export default async function (fastify: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      const result = await collectionsRepository.findAll(request.query);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to get collections');
-        return reply.internalServerError('获取追番列表失败');
-      }
-
-      return reply.success('获取追番列表成功', result.value);
+      const data = await collectionsRepository.findAll(request.query);
+      return reply.success('获取追番列表成功', data);
     }
   );
 
@@ -50,15 +44,9 @@ export default async function (fastify: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params;
 
-      const result = await collectionsRepository.deleteById(id);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to delete collection');
-        return reply.internalServerError('删除追番失败');
-      }
-
-      if (!result.value) {
-        return reply.notFound('追番不存在');
+      const deleted = await collectionsRepository.deleteById(id);
+      if (!deleted) {
+        throw httpErrors.notFound('追番不存在');
       }
 
       return reply.success('删除追番成功');

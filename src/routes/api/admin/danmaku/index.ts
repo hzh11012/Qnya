@@ -9,7 +9,7 @@ import {
 } from '../../../../schemas/danmaku.js';
 
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, rbac, danmakuRepository, log } = fastify;
+  const { authenticate, rbac, danmakuRepository, httpErrors } = fastify;
 
   /** 获取弹幕列表 */
   fastify.get<{ Querystring: DanmakuListQuery }>(
@@ -24,14 +24,8 @@ export default async function (fastify: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      const result = await danmakuRepository.findAll(request.query);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to get danmaku');
-        return reply.internalServerError('获取弹幕列表失败');
-      }
-
-      return reply.success('获取弹幕列表成功', result.value);
+      const data = await danmakuRepository.findAll(request.query);
+      return reply.success('获取弹幕列表成功', data);
     }
   );
 
@@ -50,15 +44,9 @@ export default async function (fastify: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params;
 
-      const result = await danmakuRepository.deleteById(id);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to delete danmaku');
-        return reply.internalServerError('删除弹幕失败');
-      }
-
-      if (!result.value) {
-        return reply.notFound('弹幕不存在');
+      const deleted = await danmakuRepository.deleteById(id);
+      if (!deleted) {
+        throw httpErrors.notFound('弹幕不存在');
       }
 
       return reply.success('删除弹幕成功');

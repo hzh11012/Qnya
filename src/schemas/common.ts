@@ -8,7 +8,7 @@ export const EmailSchema = z.email().min(1).max(255);
 /**
  * ID Schema
  */
-export const IdSchema = z.coerce.number().min(0);
+export const IdSchema = z.coerce.number().min(1);
 
 /**
  * 成功响应 Schema

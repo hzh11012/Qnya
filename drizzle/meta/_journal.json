@@ -36,6 +36,13 @@
       "when": 1752278400000,
       "tag": "0004_fts_search",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788798911176,
+      "tag": "0005_first_owl",
+      "breakpoints": true
     }
   ]
 }

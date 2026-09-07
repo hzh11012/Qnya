@@ -1,11 +1,12 @@
 import {
   index,
   integer,
-  text,
   pgTable,
-  varchar,
+  real,
   smallint,
-  real
+  text,
+  unique,
+  varchar
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { timestamps } from '../columns.helpers.js';
@@ -61,6 +62,8 @@ export const animeTable = pgTable(
   table => [
     index('anime_series_id_idx').on(table.seriesId),
     index('anime_name_idx').on(table.name),
+    // 同一系列下每季唯一，防止并发插入重复番剧（路由层的预检查存在竞态）
+    unique('anime_series_season_unique').on(table.seriesId, table.season),
     index('anime_filter_idx').on(
       table.type,
       table.status,

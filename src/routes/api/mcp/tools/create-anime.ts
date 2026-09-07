@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { isUniqueViolation } from '../../../../utils/db-errors.js';
 
 export function registerCreateAnime(
   server: McpServer,
@@ -60,63 +61,74 @@ export function registerCreateAnime(
       cv,
       tagIds
     }) => {
-      const seriesResult = await seriesRepository.findByName(seriesName);
-      if (seriesResult.isErr())
-        return {
-          content: [{ type: 'text', text: '查找系列失败' }],
-          isError: true
-        };
-
+      // 系列不存在则自动创建
+      const existingSeries = await seriesRepository.findByName(seriesName);
       let seriesId: number;
-      if (seriesResult.value) {
-        seriesId = seriesResult.value.id;
+      if (existingSeries) {
+        seriesId = existingSeries.id;
       } else {
-        const created = await seriesRepository.create({ name: seriesName });
-        if (created.isErr())
-          return {
-            content: [{ type: 'text', text: '创建系列失败' }],
-            isError: true
-          };
-        seriesId = created.value.id;
+        try {
+          const created = await seriesRepository.create({ name: seriesName });
+          seriesId = created.id;
+        } catch (error) {
+          // 兼发竞态兑底：同名系列已被其他请求创建
+          if (isUniqueViolation(error)) {
+            const series = await seriesRepository.findByName(seriesName);
+            if (!series) throw error;
+            seriesId = series.id;
+          } else {
+            throw error;
+          }
+        }
       }
 
       const s = season ?? 1;
       const existing = await animeRepository.findBySeriesAndSeason(seriesId, s);
-      if (existing.isErr())
-        return { content: [{ type: 'text', text: '查重失败' }], isError: true };
-      if (existing.value)
+      if (existing) {
         return {
           content: [
-            { type: 'text', text: `《${name}》第 ${s} 季已存在，无需重复入库` }
+            {
+              type: 'text',
+              text: `《${name}》第 ${s} 季已存在，无需重复入库`
+            }
           ],
           isError: true
         };
+      }
 
-      const result = await animeRepository.create({
-        seriesId,
-        season: s,
-        seasonName,
-        name,
-        description: description ?? '暂无简介',
-        remark: (remark ?? '暂无').slice(0, 25),
-        cover: cover ?? '',
-        banner: banner ?? '',
-        status: status ?? 'draft',
-        type,
-        year,
-        month,
-        director: director ?? '未知',
-        cv: cv ?? '未知',
-        tags: tagIds ?? []
-      });
-
-      if (result.isErr())
-        return {
-          content: [
-            { type: 'text', text: `入库失败: ${result.error.message}` }
-          ],
-          isError: true
-        };
+      try {
+        await animeRepository.create({
+          seriesId,
+          season: s,
+          seasonName,
+          name,
+          description: description ?? '暂无简介',
+          remark: (remark ?? '暂无').slice(0, 25),
+          cover: cover ?? '',
+          banner: banner ?? '',
+          status: status ?? 'draft',
+          type,
+          year,
+          month,
+          director: director ?? '未知',
+          cv: cv ?? '未知',
+          tags: tagIds ?? []
+        });
+      } catch (error) {
+        // 兼发竞态兑底：预检查通过后仍可能撞唯一索引
+        if (isUniqueViolation(error)) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `《${name}》第 ${s} 季已存在，无需重复入库`
+              }
+            ],
+            isError: true
+          };
+        }
+        throw error;
+      }
 
       return {
         content: [

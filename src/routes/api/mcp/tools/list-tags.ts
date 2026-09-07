@@ -12,11 +12,9 @@ export function registerListTags(server: McpServer, fastify: FastifyInstance) {
       inputSchema: {}
     },
     async () => {
-      const result = await tagsRepository.findAllOptions();
-      if (result.isErr())
-        return { content: [{ type: 'text', text: '查询失败' }], isError: true };
+      const data = await tagsRepository.findAllOptions();
       return {
-        content: [{ type: 'text', text: JSON.stringify(result.value, null, 2) }]
+        content: [{ type: 'text', text: JSON.stringify(data, null, 2) }]
       };
     }
   );

@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
-import { collectionsTable, usersTable } from '../../../db/index.js';
-import { toResult } from '../../../utils/result.js';
+import { collectionsTable, usersTable, animeTable } from '../../../db/index.js';
 import { eq, inArray, like, sql } from 'drizzle-orm';
 import type { CollectionListQuery } from '../../../schemas/collections.js';
 import { calcOffset, buildOrderBy } from '../../../utils/paginated-query.js';
@@ -20,75 +19,75 @@ const createCollectionsRepository = (fastify: FastifyInstance) => {
   return {
     /** 查询追番列表 */
     async findAll(params: CollectionListQuery) {
-      return toResult(
-        (async () => {
-          const { page, pageSize, sort, order, keyword } = params;
+      const { page, pageSize, sort, order, keyword } = params;
 
-          const whereClause = keyword
-            ? inArray(
-                collectionsTable.userId,
-                db
-                  .select({ id: usersTable.id })
-                  .from(usersTable)
-                  .where(like(usersTable.name, `%${escapeLike(t2s(keyword))}%`))
-              )
-            : undefined;
-
-          const [items, countResult] = await Promise.all([
-            db.query.collectionsTable.findMany({
-              where: whereClause,
-              orderBy: buildOrderBy(
-                collectionsTable[sort],
-                order,
-                collectionsTable.id
-              ),
-              limit: pageSize,
-              offset: calcOffset(page, pageSize),
-              with: {
-                user: {
-                  columns: {
-                    name: true
-                  }
-                },
-                anime: {
-                  columns: {
-                    name: true,
-                    season: true,
-                    seasonName: true,
-                    cover: true
-                  }
-                }
-              }
-            }),
+      const whereClause = keyword
+        ? inArray(
+            collectionsTable.userId,
             db
-              .select({ count: sql<number>`count(*)` })
-              .from(collectionsTable)
-              .where(whereClause)
-          ]);
+              .select({ id: usersTable.id })
+              .from(usersTable)
+              .where(like(usersTable.name, `%${escapeLike(t2s(keyword))}%`))
+          )
+        : undefined;
 
-          return {
-            items: items.map(item => ({
-              ...item,
-              anime: {
-                name: `${item.anime.name}${item.anime.seasonName ? ` ${item.anime.seasonName}` : item.anime.season !== 1 ? ` 第${item.anime.season}季` : ''}`,
-                cover: item.anime.cover
-              }
-            })),
-            total: Number(countResult[0]?.count ?? 0)
-          };
-        })()
-      );
+      const [items, countResult] = await Promise.all([
+        db
+          .select({
+            id: collectionsTable.id,
+            userId: collectionsTable.userId,
+            animeId: collectionsTable.animeId,
+            createdAt: collectionsTable.createdAt,
+            userName: usersTable.name,
+            animeName: animeTable.name,
+            animeSeason: animeTable.season,
+            animeSeasonName: animeTable.seasonName,
+            animeCover: animeTable.cover
+          })
+          .from(collectionsTable)
+          .leftJoin(usersTable, eq(collectionsTable.userId, usersTable.id))
+          .leftJoin(animeTable, eq(collectionsTable.animeId, animeTable.id))
+          .where(whereClause)
+          .orderBy(
+            ...buildOrderBy(collectionsTable[sort], order, collectionsTable.id)
+          )
+          .limit(pageSize)
+          .offset(calcOffset(page, pageSize)),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(collectionsTable)
+          .where(whereClause)
+      ]);
+
+      return {
+        items: items.map(
+          ({
+            userName,
+            animeName,
+            animeSeason,
+            animeSeasonName,
+            animeCover,
+            ...rest
+          }) => ({
+            ...rest,
+            user: { name: userName },
+            anime: {
+              name: `${animeName}${animeSeasonName ? ` ${animeSeasonName}` : animeSeason !== 1 ? ` 第${animeSeason}季` : ''}`,
+              cover: animeCover
+            }
+          })
+        ),
+        total: Number(countResult[0]?.count ?? 0)
+      };
     },
 
     /** 删除追番 */
     async deleteById(id: number) {
-      return toResult(
-        db
-          .delete(collectionsTable)
-          .where(eq(collectionsTable.id, id))
-          .returning()
-          .then(rows => rows[0])
-      );
+      const [deleted] = await db
+        .delete(collectionsTable)
+        .where(eq(collectionsTable.id, id))
+        .returning();
+      return deleted ?? null;
     }
   };
 };

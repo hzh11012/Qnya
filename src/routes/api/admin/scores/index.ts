@@ -13,7 +13,7 @@ import {
 } from '../../../../schemas/scores.js';
 
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, rbac, scoresRepository, log } = fastify;
+  const { authenticate, rbac, scoresRepository, httpErrors } = fastify;
 
   /** 获取评分列表 */
   fastify.get<{ Querystring: ScoreListQuery }>(
@@ -28,14 +28,8 @@ export default async function (fastify: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      const result = await scoresRepository.findAll(request.query);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to get scores');
-        return reply.internalServerError('获取评分列表失败');
-      }
-
-      return reply.success('获取评分列表成功', result.value);
+      const data = await scoresRepository.findAll(request.query);
+      return reply.success('获取评分列表成功', data);
     }
   );
 
@@ -56,22 +50,11 @@ export default async function (fastify: FastifyInstance) {
       const { id } = request.params;
 
       const existing = await scoresRepository.findById(id);
-      if (existing.isErr()) {
-        log.error({ error: existing.error }, 'Failed to find score');
-        return reply.internalServerError('更新评分失败');
+      if (!existing) {
+        throw httpErrors.notFound('评分不存在');
       }
 
-      if (!existing.value) {
-        return reply.notFound('评分不存在');
-      }
-
-      const result = await scoresRepository.update(id, request.body);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to update score');
-        return reply.internalServerError('更新评分失败');
-      }
-
+      await scoresRepository.update(id, request.body);
       return reply.success('更新评分成功');
     }
   );
@@ -91,15 +74,9 @@ export default async function (fastify: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params;
 
-      const result = await scoresRepository.deleteById(id);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to delete score');
-        return reply.internalServerError('删除评分失败');
-      }
-
-      if (!result.value) {
-        return reply.notFound('评分不存在');
+      const deleted = await scoresRepository.deleteById(id);
+      if (!deleted) {
+        throw httpErrors.notFound('评分不存在');
       }
 
       return reply.success('删除评分成功');

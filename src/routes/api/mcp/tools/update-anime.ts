@@ -59,7 +59,7 @@ export function registerUpdateAnime(
       cv,
       tagIds
     }) => {
-      const result = await animeRepository.update(id, {
+      await animeRepository.update(id, {
         name,
         description,
         remark,
@@ -73,14 +73,6 @@ export function registerUpdateAnime(
         cv,
         tags: tagIds
       });
-
-      if (result.isErr())
-        return {
-          content: [
-            { type: 'text', text: `更新失败: ${result.error.message}` }
-          ],
-          isError: true
-        };
 
       return {
         content: [{ type: 'text', text: `✅ 番剧 ID ${id} 已更新` }]

@@ -15,7 +15,7 @@ import {
 } from '../../../../schemas/topics.js';
 
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, rbac, topicsRepository, log } = fastify;
+  const { authenticate, rbac, topicsRepository, httpErrors } = fastify;
 
   /** 创建专题 */
   fastify.post<{ Body: AddTopicBody }>(
@@ -33,22 +33,11 @@ export default async function (fastify: FastifyInstance) {
       const { name } = request.body;
 
       const existing = await topicsRepository.findByName(name);
-      if (existing.isErr()) {
-        log.error({ error: existing.error }, 'Failed to find topic');
-        return reply.internalServerError('创建专题失败');
+      if (existing) {
+        throw httpErrors.conflict('专题名已存在');
       }
 
-      if (existing.value) {
-        return reply.conflict('专题名已存在');
-      }
-
-      const result = await topicsRepository.create(request.body);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to create topic');
-        return reply.internalServerError('创建专题失败');
-      }
-
+      await topicsRepository.create(request.body);
       return reply.success('创建专题成功');
     }
   );
@@ -66,14 +55,8 @@ export default async function (fastify: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      const result = await topicsRepository.findAll(request.query);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to get topics');
-        return reply.internalServerError('获取专题列表失败');
-      }
-
-      return reply.success('获取专题列表成功', result.value);
+      const data = await topicsRepository.findAll(request.query);
+      return reply.success('获取专题列表成功', data);
     }
   );
 
@@ -94,34 +77,18 @@ export default async function (fastify: FastifyInstance) {
       const { id } = request.params;
 
       const existing = await topicsRepository.findById(id);
-      if (existing.isErr()) {
-        log.error({ error: existing.error }, 'Failed to find topic');
-        return reply.internalServerError('编辑专题失败');
-      }
-
-      if (!existing.value) {
-        return reply.notFound('专题不存在');
+      if (!existing) {
+        throw httpErrors.notFound('专题不存在');
       }
 
       if (request.body.name !== undefined) {
         const duplicate = await topicsRepository.findByName(request.body.name);
-        if (duplicate.isErr()) {
-          log.error({ error: duplicate.error }, 'Failed to find topic');
-          return reply.internalServerError('编辑专题失败');
-        }
-
-        if (duplicate.value && duplicate.value.id !== id) {
-          return reply.conflict('专题名已存在');
+        if (duplicate && duplicate.id !== id) {
+          throw httpErrors.conflict('专题名已存在');
         }
       }
 
-      const result = await topicsRepository.update(id, request.body);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to update topic');
-        return reply.internalServerError('编辑专题失败');
-      }
-
+      await topicsRepository.update(id, request.body);
       return reply.success('编辑专题成功');
     }
   );
@@ -141,15 +108,9 @@ export default async function (fastify: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params;
 
-      const result = await topicsRepository.deleteById(id);
-
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to delete topic');
-        return reply.internalServerError('删除专题失败');
-      }
-
-      if (!result.value) {
-        return reply.notFound('专题不存在');
+      const deleted = await topicsRepository.deleteById(id);
+      if (!deleted) {
+        throw httpErrors.notFound('专题不存在');
       }
 
       return reply.success('删除专题成功');

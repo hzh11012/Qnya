@@ -1,7 +1,6 @@
 import bencode from 'bencode';
 import crypto from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { toResult } from '../../../utils/result.js';
 
 interface TorrentInfo {
   hash: string;
@@ -234,18 +233,17 @@ export class QBitClient {
   }
 
   /** 获取种子信息 */
-  getTorrentInfo(hash: string) {
-    return toResult(
-      this.fetchWithAuth<TorrentInfo[]>(
-        `/api/v2/torrents/info?hashes=${hash}`
-      ).then(torrents => torrents[0] ?? null)
+  async getTorrentInfo(hash: string): Promise<TorrentInfo | null> {
+    const torrents = await this.fetchWithAuth<TorrentInfo[]>(
+      `/api/v2/torrents/info?hashes=${hash}`
     );
+    return torrents[0] ?? null;
   }
 
   /** 获取种子文件列表 */
-  getTorrentFiles(hash: string) {
-    return toResult(
-      this.fetchWithAuth<TorrentFile[]>(`/api/v2/torrents/files?hash=${hash}`)
+  async getTorrentFiles(hash: string): Promise<TorrentFile[]> {
+    return this.fetchWithAuth<TorrentFile[]>(
+      `/api/v2/torrents/files?hash=${hash}`
     );
   }
 
@@ -253,18 +251,20 @@ export class QBitClient {
    * 设置文件优先级
    * @param priority 0=不下载, 1=正常, 6=高, 7=最高
    */
-  setFilePriority(hash: string, fileIndexes: number[], priority: number) {
-    return toResult(
-      this.fetchWithAuth<void>('/api/v2/torrents/filePrio', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          hash: hash.toLowerCase(),
-          id: fileIndexes.join('|'),
-          priority: String(priority)
-        }).toString()
-      })
-    );
+  async setFilePriority(
+    hash: string,
+    fileIndexes: number[],
+    priority: number
+  ): Promise<void> {
+    await this.fetchWithAuth<void>('/api/v2/torrents/filePrio', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        hash: hash.toLowerCase(),
+        id: fileIndexes.join('|'),
+        priority: String(priority)
+      }).toString()
+    });
   }
 
   /**
@@ -272,26 +272,26 @@ export class QBitClient {
    * @param uri 种子链接
    * @param tag 标签，默认 'qnya'
    */
-  addTorrent(uri: string, tag = DEFAULT_TAG) {
-    return toResult(
-      this.fetchWithAuth<string>('/api/v2/torrents/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          urls: uri,
-          savepath: this.downloadPath,
-          tags: tag,
-          ratioLimit: '0',
-          seedingTimeLimit: '0'
-        }).toString()
-      })
-    );
+  async addTorrent(uri: string, tag = DEFAULT_TAG): Promise<string> {
+    return this.fetchWithAuth<string>('/api/v2/torrents/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        urls: uri,
+        savepath: this.downloadPath,
+        tags: tag,
+        ratioLimit: '0',
+        seedingTimeLimit: '0'
+      }).toString()
+    });
   }
 
   /**
    * 获取种子列表（支持分页）
    */
-  getTorrents(params: TorrentQueryParams = {}) {
+  async getTorrents(
+    params: TorrentQueryParams = {}
+  ): Promise<{ items: TorrentInfo[]; total: number }> {
     const {
       tag = DEFAULT_TAG,
       filter,
@@ -301,33 +301,27 @@ export class QBitClient {
       offset = 0
     } = params;
 
-    return toResult(
-      (async () => {
-        const queryParams = new URLSearchParams();
-        if (tag) queryParams.set('tag', tag);
-        if (filter) queryParams.set('filter', filter);
-        if (sort) queryParams.set('sort', sort);
-        if (reverse) queryParams.set('reverse', 'true');
+    const queryParams = new URLSearchParams();
+    if (tag) queryParams.set('tag', tag);
+    if (filter) queryParams.set('filter', filter);
+    if (sort) queryParams.set('sort', sort);
+    if (reverse) queryParams.set('reverse', 'true');
 
-        const all = await this.fetchWithAuth<TorrentInfo[]>(
-          `/api/v2/torrents/info?${queryParams.toString()}`
-        );
-
-        const items = all.slice(offset, offset + limit);
-        const total = all.length;
-
-        return {
-          items,
-          total
-        };
-      })()
+    const all = await this.fetchWithAuth<TorrentInfo[]>(
+      `/api/v2/torrents/info?${queryParams.toString()}`
     );
+
+    const items = all.slice(offset, offset + limit);
+    const total = all.length;
+
+    return { items, total };
   }
 
   /**
    * 测试连接
    */
-  testConnection() {
-    return toResult(this.login().then(() => '连接成功'));
+  async testConnection(): Promise<string> {
+    await this.login();
+    return '连接成功';
   }
 }

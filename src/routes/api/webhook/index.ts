@@ -1,9 +1,24 @@
 import type { FastifyInstance } from 'fastify';
+import { timingSafeEqual } from 'node:crypto';
 import { isVideoFile } from '../../../utils/video.js';
 import { WebhookQuery, WebhookSchema } from '../../../schemas/webhook.js';
 
+/**
+ * 常量时间字符串比较，防止计时侧信道泄露 secret
+ */
+function safeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) {
+    // 长度不同时仍做一次比较，保持耗时一致
+    timingSafeEqual(bufA, bufA);
+    return false;
+  }
+  return timingSafeEqual(bufA, bufB);
+}
+
 export default async function (fastify: FastifyInstance) {
-  const { tasksRepository, qbit, config, log } = fastify;
+  const { tasksRepository, qbit, config, log, httpErrors } = fastify;
 
   /**
    * qBittorrent 下载完成 Webhook
@@ -19,8 +34,8 @@ export default async function (fastify: FastifyInstance) {
     async (request, reply) => {
       const { hash, tag, token } = request.query;
 
-      if (token !== config.QBIT_WEBHOOK_SECRET) {
-        return reply.unauthorized('未授权');
+      if (!safeEqual(token, config.QBIT_WEBHOOK_SECRET)) {
+        throw httpErrors.unauthorized('未授权');
       }
 
       if (tag !== 'qnya') {
@@ -29,61 +44,45 @@ export default async function (fastify: FastifyInstance) {
 
       log.info({ hash, tag }, 'Received download complete webhook');
 
-      try {
-        // 检查是否已处理过
-        const existingResult = await tasksRepository.findByTorrentHash(hash);
-        if (existingResult.isOk() && existingResult.value.length > 0) {
-          log.info({ hash }, 'Torrent already processed');
-          return reply.success('种子已存在');
-        }
-
-        // 获取种子信息
-        const infoResult = await qbit.getTorrentInfo(hash);
-        if (infoResult.isErr() || !infoResult.value) {
-          log.error({ hash }, 'Failed to get torrent info');
-          return reply.internalServerError('获取种子信息失败');
-        }
-        const torrentInfo = infoResult.value;
-
-        // 获取文件列表
-        const filesResult = await qbit.getTorrentFiles(hash);
-        if (filesResult.isErr()) {
-          log.error({ hash }, 'Failed to get torrent files');
-          return reply.internalServerError('获取文件列表失败');
-        }
-        const files = filesResult.value;
-
-        // 过滤视频文件
-        const videoFiles = files.filter(f => isVideoFile(f.name));
-
-        if (videoFiles.length === 0) {
-          log.warn({ hash }, 'No video files in torrent');
-          return reply.success('无视频文件');
-        }
-
-        // 创建任务记录
-        const hostDownloadPath =
-          config.QBIT_HOST_DOWNLOAD_PATH || torrentInfo.save_path;
-
-        const taskParams = videoFiles.map(f => ({
-          torrentHash: hash,
-          fileIndex: f.index,
-          filename: f.name.split('/').pop() || f.name,
-          filePath: `${hostDownloadPath}/${f.name}`,
-          fileSize: f.size
-        }));
-
-        const createResult = await tasksRepository.createMany(taskParams);
-        if (createResult.isErr()) {
-          log.error({ error: createResult.error }, 'Failed to create tasks');
-          return reply.internalServerError('创建任务失败');
-        }
-
-        return reply.success('创建任务成功');
-      } catch (error) {
-        log.error({ error, hash }, 'Webhook processing failed');
-        return reply.internalServerError('创建任务失败');
+      // 检查是否已处理过
+      const existing = await tasksRepository.findByTorrentHash(hash);
+      if (existing.length > 0) {
+        log.info({ hash }, 'Torrent already processed');
+        return reply.success('种子已存在');
       }
+
+      // 获取种子信息
+      const torrentInfo = await qbit.getTorrentInfo(hash);
+      if (!torrentInfo) {
+        log.error({ hash }, 'Failed to get torrent info');
+        throw httpErrors.internalServerError('获取种子信息失败');
+      }
+
+      // 获取文件列表
+      const files = await qbit.getTorrentFiles(hash);
+
+      // 过滤视频文件
+      const videoFiles = files.filter(f => isVideoFile(f.name));
+
+      if (videoFiles.length === 0) {
+        log.warn({ hash }, 'No video files in torrent');
+        return reply.success('无视频文件');
+      }
+
+      // 创建任务记录
+      const hostDownloadPath =
+        config.QBIT_HOST_DOWNLOAD_PATH || torrentInfo.save_path;
+
+      const taskParams = videoFiles.map(f => ({
+        torrentHash: hash,
+        fileIndex: f.index,
+        filename: f.name.split('/').pop() || f.name,
+        filePath: `${hostDownloadPath}/${f.name}`,
+        fileSize: f.size
+      }));
+
+      await tasksRepository.createMany(taskParams);
+      return reply.success('创建任务成功');
     }
   );
 }

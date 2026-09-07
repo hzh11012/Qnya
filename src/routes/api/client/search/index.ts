@@ -14,7 +14,7 @@ import { t2s } from '../../../../utils/t2s.js';
 const CJK_RE = /\p{Script=Han}/u;
 
 export default async function (fastify: FastifyInstance) {
-  const { animeRepository, log, authenticate, rbac } = fastify;
+  const { animeRepository, authenticate, rbac } = fastify;
 
   fastify.get<{ Querystring: SearchSuggestQuery }>(
     '/suggestions',
@@ -35,14 +35,10 @@ export default async function (fastify: FastifyInstance) {
         keyword,
         excludeTypes
       );
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to get search suggestions');
-        return reply.internalServerError('获取搜索建议失败');
-      }
 
       const isChinese = CJK_RE.test(keyword);
 
-      const data = result.value.map(a => {
+      const data = result.map(a => {
         let highlightName: string;
         if (a.matchedByName) {
           highlightName = highlight(a.name, isChinese ? t2s(keyword) : keyword);
@@ -77,19 +73,15 @@ export default async function (fastify: FastifyInstance) {
         pageSize,
         excludeTypes
       );
-      if (result.isErr()) {
-        log.error({ error: result.error }, 'Failed to search anime list');
-        return reply.internalServerError('搜索失败');
-      }
 
       const isChinese = CJK_RE.test(keyword);
 
-      const items = result.value.items.map(a => ({
+      const items = result.items.map(a => ({
         ...a,
         highlightName: highlight(a.name, isChinese ? t2s(keyword) : keyword)
       }));
 
-      return reply.success('搜索成功', { items, total: result.value.total });
+      return reply.success('搜索成功', { items, total: result.total });
     }
   );
 }

@@ -9,7 +9,7 @@ import {
 import { readDir } from '../../../../utils/fs.js';
 
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, rbac, config } = fastify;
+  const { authenticate, rbac, config, httpErrors } = fastify;
 
   /** 获取资源目录文件夹列表（按需加载，每次只返回一层） */
   fastify.get<{ Querystring: FileTreeQuery }>(
@@ -28,7 +28,7 @@ export default async function (fastify: FastifyInstance) {
       // 安全检查：防止路径穿越
       const resolved = path.resolve(rootDir, subPath);
       if (!resolved.startsWith(path.resolve(rootDir))) {
-        return reply.badRequest('非法路径');
+        throw httpErrors.badRequest('非法路径');
       }
 
       try {
@@ -36,7 +36,7 @@ export default async function (fastify: FastifyInstance) {
         return reply.success('获取文件树成功', nodes);
       } catch (err: any) {
         if (err.code === 'ENOENT') {
-          return reply.notFound('目录不存在');
+          throw httpErrors.notFound('目录不存在');
         }
         throw err;
       }

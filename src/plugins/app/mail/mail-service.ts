@@ -2,7 +2,6 @@ import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 import nodemailer, { type Transporter } from 'nodemailer';
 import type SMTPTransport from 'nodemailer/lib/smtp-transport/index.js';
-import { toResult } from '../../../utils/result.js';
 
 interface SendMailOptions {
   to: string;
@@ -28,15 +27,13 @@ const createMailService = (
      * 发送邮件
      */
     async send(options: SendMailOptions) {
-      return toResult(
-        transporter.sendMail({
-          from: config.SMTP_FROM,
-          to: options.to,
-          subject: options.subject,
-          text: options.text,
-          html: options.html
-        })
-      );
+      await transporter.sendMail({
+        from: config.SMTP_FROM,
+        to: options.to,
+        subject: options.subject,
+        text: options.text,
+        html: options.html
+      });
     },
 
     /**
@@ -61,14 +58,14 @@ const createMailService = (
       `;
       const text = `【Qnya】您的登录验证码是：${code}，有效期5分钟，请勿泄露给他人。`;
 
-      return this.send({ to: email, subject, html, text });
+      await this.send({ to: email, subject, html, text });
     },
 
     /**
      * 验证 SMTP 连接
      */
     async verify() {
-      return toResult(transporter.verify());
+      await transporter.verify();
     }
   };
 };
