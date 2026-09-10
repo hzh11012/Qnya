@@ -138,6 +138,15 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
       });
     },
 
+    /** 删除番剧（关联表均级联删除） */
+    async deleteById(id: number) {
+      const [deleted] = await db
+        .delete(animeTable)
+        .where(eq(animeTable.id, id))
+        .returning();
+      return deleted ?? null;
+    },
+
     /** 查询列表 */
     async findAll(params: AnimeListQuery) {
       const {

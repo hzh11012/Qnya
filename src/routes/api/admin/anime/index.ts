@@ -173,4 +173,28 @@ export default async function (fastify: FastifyInstance) {
       return reply.success('编辑番剧成功');
     }
   );
+
+  /** 删除番剧 */
+  fastify.delete<{ Params: UpdateAnimeParams }>(
+    '/:id',
+    {
+      preHandler: [authenticate, rbac.requireAnyRole('admin')],
+      schema: {
+        params: UpdateAnimeParamsSchema,
+        response: {
+          200: SuccessResponseSchema()
+        }
+      }
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+
+      const deleted = await animeRepository.deleteById(id);
+      if (!deleted) {
+        throw httpErrors.notFound('番剧不存在');
+      }
+
+      return reply.success('删除番剧成功');
+    }
+  );
 }
