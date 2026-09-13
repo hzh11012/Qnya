@@ -57,7 +57,9 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
           ${animeTable.name} ILIKE ${'%' + escaped + '%'}
           OR ${animeTable.namePinyin} ILIKE ${'%' + pinyinKw + '%'}
           OR ${animeTable.nameInitials} ILIKE ${'%' + pinyinKw + '%'}
-        )`
+        )`,
+        // 与搜索列表保持一致，草稿不对外暴露
+        notInArray(animeTable.status, ['draft'])
       ];
       if (excludeTypes?.length) {
         conditions.push(notInArray(animeTable.type, excludeTypes));
