@@ -26,8 +26,10 @@ export default async function (fastify: FastifyInstance) {
       const rootDir = config.RESOURCE_ROOT_PATH;
 
       // 安全检查：防止路径穿越
+      // 带上路径分隔符比较，避免 /data/resources-private 绕过 /data/resources 前缀
+      const root = path.resolve(rootDir);
       const resolved = path.resolve(rootDir, subPath);
-      if (!resolved.startsWith(path.resolve(rootDir))) {
+      if (resolved !== root && !resolved.startsWith(root + path.sep)) {
         throw httpErrors.badRequest('非法路径');
       }
 

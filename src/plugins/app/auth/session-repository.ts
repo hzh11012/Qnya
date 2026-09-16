@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
 export interface SessionData {
   userId: number;
@@ -32,11 +32,19 @@ const createSessionRepository = (fastify: FastifyInstance) => {
     },
 
     /**
-     * 构建 session key
-     * @param token 会话Token
+     * 对 token 做 SHA-256 哈希：Redis 中只存哈希值，
+     * 即使 Redis 被攻破也无法伪造会话
      */
-    buildKey(token: string): string {
-      return `${SESSION_PREFIX}${token}`;
+    hashToken(token: string): string {
+      return createHash('sha256').update(token).digest('hex');
+    },
+
+    /**
+     * 构建已哈希 token 的 session key
+     * @param tokenHash 已哈希的会话Token
+     */
+    buildKey(tokenHash: string): string {
+      return `${SESSION_PREFIX}${tokenHash}`;
     },
 
     /**
@@ -81,12 +89,14 @@ const createSessionRepository = (fastify: FastifyInstance) => {
         expiresAt
       };
 
-      const key = this.buildKey(token);
+      const tokenHash = this.hashToken(token);
+      const key = this.buildKey(tokenHash);
       const userIndexKey = this.buildUserIndexKey(userId);
 
       const pipeline = redis.pipeline();
       pipeline.setex(key, maxAgeSeconds, JSON.stringify(sessionData));
-      pipeline.zadd(userIndexKey, expiresAt, token);
+      // zset 索引中同样只存哈希值
+      pipeline.zadd(userIndexKey, expiresAt, tokenHash);
       pipeline.zremrangebyscore(userIndexKey, '-inf', now);
       await pipeline.exec();
       return token;
@@ -101,7 +111,7 @@ const createSessionRepository = (fastify: FastifyInstance) => {
     async getSession(token: string): Promise<SessionData | null> {
       if (!this.isValidToken(token)) return null;
 
-      const key = this.buildKey(token);
+      const key = this.buildKey(this.hashToken(token));
       const data = await redis.get(key);
       if (!data) return null;
       return JSON.parse(data) as SessionData;
@@ -121,12 +131,12 @@ const createSessionRepository = (fastify: FastifyInstance) => {
 
       sessionData.expiresAt = newExpiresAt;
 
-      const sessionKey = this.buildKey(token);
+      const sessionKey = this.buildKey(this.hashToken(token));
       const userIndexKey = this.buildUserIndexKey(sessionData.userId);
 
       const pipeline = redis.pipeline();
       pipeline.setex(sessionKey, maxAgeSeconds, JSON.stringify(sessionData));
-      pipeline.zadd(userIndexKey, newExpiresAt, token);
+      pipeline.zadd(userIndexKey, newExpiresAt, this.hashToken(token));
       pipeline.zremrangebyscore(userIndexKey, '-inf', now);
       await pipeline.exec();
     },
@@ -136,7 +146,7 @@ const createSessionRepository = (fastify: FastifyInstance) => {
      * @param token 会话Token
      */
     async shouldRenew(token: string): Promise<boolean> {
-      const ttl = await redis.ttl(this.buildKey(token));
+      const ttl = await redis.ttl(this.buildKey(this.hashToken(token)));
       if (ttl <= 0) return false;
 
       const thresholdSeconds = config.SESSION_RENEW_THRESHOLD / 1000;
@@ -151,14 +161,13 @@ const createSessionRepository = (fastify: FastifyInstance) => {
       if (!this.isValidToken(token)) return;
 
       const session = await this.getSession(token);
-      const key = this.buildKey(token);
-
       const pipeline = redis.pipeline();
-      pipeline.del(key);
+      pipeline.del(this.buildKey(this.hashToken(token)));
 
       if (session) {
         const userIndexKey = this.buildUserIndexKey(session.userId);
-        pipeline.zrem(userIndexKey, token);
+        // zset 中存的是哈希值
+        pipeline.zrem(userIndexKey, this.hashToken(token));
       }
 
       await pipeline.exec();
@@ -171,10 +180,11 @@ const createSessionRepository = (fastify: FastifyInstance) => {
     async deleteAllUserSessions(userId: number) {
       const userIndexKey = this.buildUserIndexKey(userId);
 
-      const tokens = await redis.zrange(userIndexKey, 0, -1);
+      // zset 中存的是已哈希的 token
+      const tokenHashes = await redis.zrange(userIndexKey, 0, -1);
 
-      if (tokens.length > 0) {
-        const keys = tokens.map(t => this.buildKey(t));
+      if (tokenHashes.length > 0) {
+        const keys = tokenHashes.map(t => this.buildKey(t));
         await redis.del(...keys);
       }
 
@@ -194,13 +204,14 @@ const createSessionRepository = (fastify: FastifyInstance) => {
       const now = Date.now();
 
       await redis.zremrangebyscore(userIndexKey, '-inf', now);
-      const tokens = await redis.zrangebyscore(userIndexKey, now, '+inf');
-      if (tokens.length === 0) return 0;
+      // zset 中存的是已哈希的 token
+      const tokenHashes = await redis.zrangebyscore(userIndexKey, now, '+inf');
+      if (tokenHashes.length === 0) return 0;
 
       // 批量获取
       const getPipeline = redis.pipeline();
-      for (const token of tokens) {
-        const key = this.buildKey(token);
+      for (const tokenHash of tokenHashes) {
+        const key = this.buildKey(tokenHash);
         getPipeline.get(key);
         getPipeline.ttl(key);
       }
@@ -211,8 +222,8 @@ const createSessionRepository = (fastify: FastifyInstance) => {
       const updatePipeline = redis.pipeline();
       let updatedCount = 0;
 
-      for (let i = 0; i < tokens.length; i++) {
-        const token = tokens[i];
+      for (let i = 0; i < tokenHashes.length; i++) {
+        const tokenHash = tokenHashes[i];
         const data = results[i * 2]?.[1] as string | null;
         const ttl = results[i * 2 + 1]?.[1] as number;
 
@@ -220,7 +231,7 @@ const createSessionRepository = (fastify: FastifyInstance) => {
           const session = JSON.parse(data) as SessionData;
           updater(session);
           updatePipeline.setex(
-            this.buildKey(token),
+            this.buildKey(tokenHash),
             ttl,
             JSON.stringify(session)
           );

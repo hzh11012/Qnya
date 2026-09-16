@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { IdSchema, PaginationQuerySchema } from './common.js';
 
 export const SearchSuggestQuerySchema = z.object({
-  keyword: z.string().min(1).max(50)
+  // trim 前置，防止纯空白关键词穿透为全表匹配
+  keyword: z.string().trim().min(1).max(50)
 });
 
 export type SearchSuggestQuery = z.infer<typeof SearchSuggestQuerySchema>;
@@ -15,7 +16,7 @@ export const SearchSuggestItemSchema = z.object({
 export const SearchSuggestResponseSchema = z.array(SearchSuggestItemSchema);
 
 export const SearchListQuerySchema = z.object({
-  keyword: z.string().min(1).max(50),
+  keyword: z.string().trim().min(1).max(50),
   ...PaginationQuerySchema
 });
 

@@ -60,6 +60,14 @@ export default async function (fastify: FastifyInstance) {
         throw httpErrors.notFound('用户不存在');
       }
 
+      // 防止唯一管理员把自己停用/降级后无法恢复
+      if (
+        id === request.sessionData!.userId &&
+        (role !== undefined || status === false)
+      ) {
+        throw httpErrors.forbidden('不能修改自己的角色或状态');
+      }
+
       await usersRepository.update(id, { name, role, status, avatar });
 
       // 同步更新 session 中的角色和状态（失败仅记录日志，不影响主流程）

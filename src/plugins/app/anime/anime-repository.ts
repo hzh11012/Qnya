@@ -27,6 +27,43 @@ declare module 'fastify' {
 const createAnimeRepository = (fastify: FastifyInstance) => {
   const db = fastify.db;
 
+  /** 名称/拼音/首字母联合模糊匹配条件（客户端搜索与管理后台列表共用）
+   *
+   * 双路匹配支持混合关键词（如 "海z"、"hz王"）：
+   * - 归一化路：汉字转全拼/首字母后匹配拼音列
+   * - 原始路：保留原始关键词匹配名称与拼音列（纯中文/纯拉丁输入）
+   */
+  const nameSearchCondition = (keyword: string) => {
+    const simplified = t2s(keyword);
+    const raw = escapeLike(keyword.toLowerCase());
+    const full = escapeLike(toPinyin(simplified).toLowerCase());
+    const initials = escapeLike(toInitials(simplified).toLowerCase());
+    return sql`(
+      ${animeTable.name} ILIKE ${'%' + escapeLike(simplified) + '%'}
+      OR ${animeTable.namePinyin} ILIKE ${'%' + full + '%'}
+      OR ${animeTable.nameInitials} ILIKE ${'%' + initials + '%'}
+      OR ${animeTable.namePinyin} ILIKE ${'%' + raw + '%'}
+      OR ${animeTable.nameInitials} ILIKE ${'%' + raw + '%'}
+    )`;
+  };
+
+  /** 名称精确模糊命中（用于高亮判断） */
+  const nameMatchCondition = (keyword: string) => {
+    const escaped = escapeLike(t2s(keyword));
+    return sql<boolean>`(${animeTable.name} ILIKE ${'%' + escaped + '%'})`;
+  };
+
+  /** 相关度排序：名称命中位置 → 拼音命中位置，id 作稳定分页 tiebreaker */
+  const relevanceOrderBy = (keyword: string) => {
+    const simplified = t2s(keyword);
+    const pinyinFull = toPinyin(simplified).toLowerCase();
+    return [
+      sql`position(${simplified} in ${animeTable.name})`,
+      sql`position(${pinyinFull} in ${animeTable.namePinyin})`,
+      asc(animeTable.id)
+    ];
+  };
+
   return {
     /** 根据 ID 查找 */
     async findById(id: number) {
@@ -50,14 +87,8 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
 
     /** 根据名称模糊查找（用于搜索建议） */
     async findByNameLike(keyword: string, excludeTypes?: AnimeType[]) {
-      const escaped = escapeLike(t2s(keyword));
-      const pinyinKw = escapeLike(keyword.toLowerCase());
       const conditions = [
-        sql`(
-          ${animeTable.name} ILIKE ${'%' + escaped + '%'}
-          OR ${animeTable.namePinyin} ILIKE ${'%' + pinyinKw + '%'}
-          OR ${animeTable.nameInitials} ILIKE ${'%' + pinyinKw + '%'}
-        )`,
+        nameSearchCondition(keyword),
         // 与搜索列表保持一致，草稿不对外暴露
         notInArray(animeTable.status, ['draft'])
       ];
@@ -69,12 +100,11 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
         .select({
           id: animeTable.id,
           name: animeTable.name,
-          namePinyin: animeTable.namePinyin,
-          nameInitials: animeTable.nameInitials,
-          matchedByName: sql<boolean>`${animeTable.name} ILIKE ${'%' + escaped + '%'}`
+          matchedByName: nameMatchCondition(keyword)
         })
         .from(animeTable)
         .where(and(...conditions))
+        .orderBy(...relevanceOrderBy(keyword))
         .limit(10);
     },
 
@@ -168,9 +198,8 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
       const conditions = [];
 
       if (keyword) {
-        conditions.push(
-          sql`${animeTable.name} ILIKE ${'%' + escapeLike(t2s(keyword)) + '%'}`
-        );
+        // 与客户端搜索保持一致：同时匹配名称/拼音/首字母
+        conditions.push(nameSearchCondition(keyword));
       }
       if (status?.length) {
         conditions.push(inArray(animeTable.status, status));
@@ -256,14 +285,8 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
       pageSize: number,
       excludeTypes?: AnimeType[]
     ) {
-      const escaped = escapeLike(t2s(keyword));
-      const pinyinKw = escapeLike(keyword.toLowerCase());
       const conditions = [
-        sql`(
-          ${animeTable.name} ILIKE ${'%' + escaped + '%'}
-          OR ${animeTable.namePinyin} ILIKE ${'%' + pinyinKw + '%'}
-          OR ${animeTable.nameInitials} ILIKE ${'%' + pinyinKw + '%'}
-        )`,
+        nameSearchCondition(keyword),
         notInArray(animeTable.status, ['draft'])
       ];
       if (excludeTypes?.length) {
@@ -271,11 +294,26 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
       }
       const whereClause = and(...conditions);
 
-      // 主查询
+      // 主查询（显式列选择，避免向客户端传输未暴露的字段）
       const items = await db
-        .select()
+        .select({
+          id: animeTable.id,
+          name: animeTable.name,
+          description: animeTable.description,
+          cover: animeTable.cover,
+          status: animeTable.status,
+          type: animeTable.type,
+          director: animeTable.director,
+          cv: animeTable.cv,
+          year: animeTable.year,
+          month: animeTable.month,
+          avgScore: animeTable.avgScore,
+          scoreCount: animeTable.scoreCount,
+          matchedByName: nameMatchCondition(keyword)
+        })
         .from(animeTable)
         .where(whereClause)
+        .orderBy(...relevanceOrderBy(keyword))
         .limit(pageSize)
         .offset(calcOffset(page, pageSize));
 
@@ -344,12 +382,17 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
 
     /** 查询番剧选项 */
     async findAllOptions() {
-      return db
-        .select({
-          label: sql<string>`${animeTable.name} || CASE WHEN ${animeTable.seasonName} IS NOT NULL THEN ' ' || ${animeTable.seasonName} WHEN ${animeTable.season} != 1 THEN ' 第' || ${animeTable.season} || '季' ELSE '' END`,
-          value: sql<string>`${animeTable.id}::text`
-        })
-        .from(animeTable);
+      return (
+        db
+          .select({
+            label: sql<string>`${animeTable.name} || CASE WHEN ${animeTable.seasonName} IS NOT NULL THEN ' ' || ${animeTable.seasonName} WHEN ${animeTable.season} != 1 THEN ' 第' || ${animeTable.season} || '季' ELSE '' END`,
+            value: sql<string>`${animeTable.id}::text`
+          })
+          .from(animeTable)
+          // 草稿未发布，不作为关联选项
+          .where(notInArray(animeTable.status, ['draft']))
+          .orderBy(asc(animeTable.name))
+      );
     }
   };
 };

@@ -61,7 +61,8 @@ export const animeTable = pgTable(
   },
   table => [
     index('anime_series_id_idx').on(table.seriesId),
-    index('anime_name_idx').on(table.name),
+    // pg_trgm 索引：btree 无法服务 ILIKE '%kw%'，模糊搜索统一走 trgm
+    index('anime_name_trgm_idx').using('gin', sql`${table.name} gin_trgm_ops`),
     // 同一系列下每季唯一，防止并发插入重复番剧（路由层的预检查存在竞态）
     unique('anime_series_season_unique').on(table.seriesId, table.season),
     index('anime_filter_idx').on(

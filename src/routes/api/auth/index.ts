@@ -67,6 +67,13 @@ export default async function (fastify: FastifyInstance) {
   fastify.post<{ Body: LoginBody }>(
     '/login',
     {
+      // 验证码为短数字串，需防止暴力猜解（比全局限流更严格）
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: '1 minute'
+        }
+      },
       schema: {
         body: LoginSchema,
         response: {
@@ -82,7 +89,6 @@ export default async function (fastify: FastifyInstance) {
       if (!valid) {
         throw httpErrors.badRequest('验证码错误或已过期');
       }
-
       // 获取或创建用户
       const user = await usersRepository.findOrCreate(email);
 

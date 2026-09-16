@@ -24,6 +24,7 @@ export function registerSearchTmdb(
       url.searchParams.set('include_adult', 'true');
 
       const res = await fetch(url.toString(), {
+        signal: AbortSignal.timeout(10_000),
         headers: {
           Authorization: `Bearer ${config.TMDB_API_KEY}`,
           Accept: 'application/json'

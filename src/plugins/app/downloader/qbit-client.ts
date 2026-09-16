@@ -67,6 +67,11 @@ interface TorrentQueryParams {
 /** 默认标签，用于标识本系统添加的种子 */
 const DEFAULT_TAG = 'qnya';
 
+/** 上游请求超时：防止 qBittorrent 挂起时占住连接 */
+const FETCH_TIMEOUT_MS = 30_000;
+/** 种子文件下载超时（文件可能较大） */
+const TORRENT_DOWNLOAD_TIMEOUT_MS = 60_000;
+
 export class QBitClient {
   private cookie: string | null = null;
   private cookieExpiry = 0;
@@ -96,6 +101,7 @@ export class QBitClient {
     this.loginPromise = (async () => {
       const response = await fetch(`${this.baseUrl}/api/v2/auth/login`, {
         method: 'POST',
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
         },
@@ -114,14 +120,15 @@ export class QBitClient {
         throw new Error(`qBittorrent login failed: ${text}`);
       }
 
-      const setCookie = response.headers.get('set-cookie');
-      if (!setCookie) {
+      const setCookie = response.headers.getSetCookie();
+      if (!setCookie.length) {
         throw new Error('qBittorrent login failed: no cookie returned');
       }
 
+      // getSetCookie() 逐条返回，避免 Expires 日期中的逗号干扰分割
       this.cookie = setCookie
-        .split(',')
-        .map(c => c.split(';')[0])
+        .map(c => c.split(';')[0].trim())
+        .filter(Boolean)
         .join('; ');
 
       this.cookieExpiry = Date.now() + 60 * 60 * 1000;
@@ -142,17 +149,27 @@ export class QBitClient {
 
   private async fetchWithAuth<T>(
     path: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    retry = true
   ): Promise<T> {
     await this.ensureLoggedIn();
 
     const response = await fetch(`${this.baseUrl}${path}`, {
       ...options,
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       headers: {
         ...options.headers,
         Cookie: this.cookie!
       }
     });
+
+    // qBit 服务端会话可能早于本地记录的过期时间失效：
+    // 401 时清掉本地 cookie 重登一次再试（body 均为字符串，可安全重放）
+    if (response.status === 401 && retry) {
+      this.cookie = null;
+      this.cookieExpiry = 0;
+      return this.fetchWithAuth<T>(path, options, false);
+    }
 
     if (!response.ok) {
       const text = await response.text().catch(() => '');
@@ -208,7 +225,9 @@ export class QBitClient {
 
   /** 从 .torrent URL 计算 info hash */
   private async calculateTorrentHash(uri: string): Promise<string> {
-    const response = await fetch(uri);
+    const response = await fetch(uri, {
+      signal: AbortSignal.timeout(TORRENT_DOWNLOAD_TIMEOUT_MS)
+    });
     if (!response.ok) {
       throw new Error(`下载种子文件失败: ${response.status}`);
     }

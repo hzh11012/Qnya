@@ -15,9 +15,19 @@ declare module 'fastify' {
 const ADULT_ALLOWED_ROLES = ['admin', 'premium'];
 
 const createRbacMiddleware = () => {
+  /** 前置校验：必须先经过 authenticate，避免非空断言崩溃成 500 */
+  const requireSession = (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.sessionData) {
+      reply.unauthorized('未登录');
+      return false;
+    }
+    return true;
+  };
+
   return {
     requireAnyRole(...roleCodes: string[]) {
       return async (request: FastifyRequest, reply: FastifyReply) => {
+        if (!requireSession(request, reply)) return reply;
         const role = request.sessionData!.role;
         if (!roleCodes.includes(role)) {
           return reply.forbidden('权限不足');
@@ -26,7 +36,8 @@ const createRbacMiddleware = () => {
     },
 
     filterAdultTypes() {
-      return async (request: FastifyRequest) => {
+      return async (request: FastifyRequest, reply: FastifyReply) => {
+        if (!requireSession(request, reply)) return reply;
         request.excludeTypes = ADULT_ALLOWED_ROLES.includes(
           request.sessionData!.role
         )

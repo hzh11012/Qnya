@@ -38,6 +38,10 @@ const getLoggerConfig = (): LoggerOptions | boolean => {
 const options: AppOptions = {
   logger: getLoggerConfig(),
   genReqId: () => randomUUID(),
+  // 生产部署在反向代理（nginx/Docker）后面时必须开启，
+  // 否则 request.ip 恒为代理地址，限流会对所有用户共享同一个桶，
+  // 且日志中无法记录真实客户端 IP
+  trustProxy: true,
   routerOptions: {
     querystringParser: (str: string) => qs.parse(str)
   }

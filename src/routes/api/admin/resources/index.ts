@@ -37,6 +37,7 @@ export default async function (fastify: FastifyInstance) {
 
       const response = await fetch(url.toString(), {
         method: 'GET',
+        signal: AbortSignal.timeout(10_000),
         headers: { 'Content-Type': 'application/json' }
       });
 

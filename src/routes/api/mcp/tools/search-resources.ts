@@ -26,6 +26,7 @@ export function registerSearchResources(server: McpServer) {
       let data: any;
       try {
         const response = await fetch(url.toString(), {
+          signal: AbortSignal.timeout(10_000),
           headers: { 'Content-Type': 'application/json' }
         });
         if (!response.ok)

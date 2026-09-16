@@ -43,6 +43,13 @@
       "when": 1788798911176,
       "tag": "0005_first_owl",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789578500133,
+      "tag": "0006_daily_the_hunter",
+      "breakpoints": true
     }
   ]
 }
