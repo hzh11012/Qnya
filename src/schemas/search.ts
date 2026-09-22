@@ -9,6 +9,7 @@ export const SearchSuggestQuerySchema = z.object({
 export type SearchSuggestQuery = z.infer<typeof SearchSuggestQuerySchema>;
 
 export const SearchSuggestItemSchema = z.object({
+  id: IdSchema,
   name: z.string(),
   highlightName: z.string()
 });

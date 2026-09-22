@@ -21,6 +21,9 @@ declare module 'fastify' {
       DB_POOL_CONNECTION_TIMEOUT: number;
       // Redis
       REDIS_URL: string;
+      // Meilisearch
+      MEILI_URL: string;
+      MEILI_MASTER_KEY: string;
       // Session
       SESSION_DOMAIN: string;
       SESSION_SECRET: string;
@@ -58,6 +61,7 @@ const schema = {
     'POSTGRES_PASSWORD',
     'ADMIN_EMAIL',
     'REDIS_URL',
+    'MEILI_URL',
     'SESSION_DOMAIN',
     'SESSION_SECRET',
     'SMTP_HOST',
@@ -88,6 +92,9 @@ const schema = {
     DB_POOL_CONNECTION_TIMEOUT: { type: 'number', default: 2000 },
     // Redis
     REDIS_URL: { type: 'string' },
+    // Meilisearch
+    MEILI_URL: { type: 'string' },
+    MEILI_MASTER_KEY: { type: 'string', default: '' },
     // Session
     SESSION_DOMAIN: { type: 'string' },
     SESSION_SECRET: { type: 'string' },

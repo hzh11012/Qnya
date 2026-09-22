@@ -9,7 +9,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-qnya}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-qnya}']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -20,10 +20,20 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.53.2
+    restart: unless-stopped
+    volumes:
+      - meili_data:/meili_data
+    environment:
+      # 未设置时 Meilisearch 以无鉴权模式运行（仅容器网络内部可达）
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-}
+      MEILI_NO_ANALYTICS: 'true'
 
   qbit:
     image: lscr.io/linuxserver/qbittorrent:4.4.5
@@ -37,11 +47,11 @@ services:
       - ${QBIT_DATA_PATH:-./data/qbit}/config:/config
       - ${QBIT_DATA_PATH:-./data/qbit}/downloads:/downloads
     ports:
-      - "${QBIT_WEBUI_PORT:-8080}:8080"
-      - "${QBIT_BT_PORT:-6881}:6881"
-      - "${QBIT_BT_PORT:-6881}:6881/udp"
+      - '${QBIT_WEBUI_PORT:-8080}:8080'
+      - '${QBIT_BT_PORT:-6881}:6881'
+      - '${QBIT_BT_PORT:-6881}:6881/udp'
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080 || exit 1"]
+      test: ['CMD-SHELL', 'curl -sf http://localhost:8080 || exit 1']
       interval: 15s
       timeout: 10s
       retries: 5
@@ -56,13 +66,16 @@ services:
         ADMIN_VERSION: ${ADMIN_VERSION:-}
     restart: unless-stopped
     ports:
-      - "${PORT:-5000}:5000"
-      - "${ADMIN_PORT:-5001}:5001"
+      - '${PORT:-5000}:5000'
+      - '${ADMIN_PORT:-5001}:5001'
     env_file: .env.docker
     environment:
       # 容器间连接地址，env_file 里无法预知，在此固定
       DATABASE_URL: postgres://${POSTGRES_USER:-qnya}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-qnya}
       REDIS_URL: redis://redis:6379
+      # Meilisearch（必选，应用启动时会等待其就绪）
+      MEILI_URL: ${MEILI_URL-http://meilisearch:7700}
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY-}
       QBIT_HOST: http://qbit:8080
       RESOURCE_ROOT_PATH: /data/resources
       QBIT_DOWNLOAD_PATH: /downloads
@@ -81,3 +94,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  meili_data:

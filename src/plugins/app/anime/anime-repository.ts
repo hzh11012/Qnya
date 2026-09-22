@@ -4,10 +4,9 @@ import {
   animeTable,
   animeToTagsTable,
   tagsTable,
-  videosTable,
-  type AnimeType
+  videosTable
 } from '../../../db/index.js';
-import { and, asc, eq, inArray, notInArray, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, notInArray, sql } from 'drizzle-orm';
 import {
   AddAnimeBody,
   AnimeListQuery,
@@ -16,6 +15,7 @@ import {
 import { escapeLike } from '../../../utils/like.js';
 import { calcOffset, buildOrderBy } from '../../../utils/paginated-query.js';
 import { t2s } from '../../../utils/t2s.js';
+import { buildSeasonSuffix } from '../../../utils/season.js';
 import { toPinyin, toInitials } from '../../../utils/pinyin.js';
 
 declare module 'fastify' {
@@ -27,7 +27,7 @@ declare module 'fastify' {
 const createAnimeRepository = (fastify: FastifyInstance) => {
   const db = fastify.db;
 
-  /** 名称/拼音/首字母联合模糊匹配条件（客户端搜索与管理后台列表共用）
+  /** 名称/拼音/首字母联合模糊匹配条件（管理后台列表关键词过滤使用）
    *
    * 双路匹配支持混合关键词（如 "海z"、"hz王"）：
    * - 归一化路：汉字转全拼/首字母后匹配拼音列
@@ -47,26 +47,90 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
     )`;
   };
 
-  /** 名称精确模糊命中（用于高亮判断） */
-  const nameMatchCondition = (keyword: string) => {
-    const escaped = escapeLike(t2s(keyword));
-    return sql<boolean>`(${animeTable.name} ILIKE ${'%' + escaped + '%'})`;
+  /** 客户端搜索结果列 */
+  const clientColumns = {
+    id: animeTable.id,
+    name: animeTable.name,
+    season: animeTable.season,
+    seasonName: animeTable.seasonName,
+    description: animeTable.description,
+    cover: animeTable.cover,
+    status: animeTable.status,
+    type: animeTable.type,
+    director: animeTable.director,
+    cv: animeTable.cv,
+    year: animeTable.year,
+    month: animeTable.month,
+    avgScore: animeTable.avgScore,
+    scoreCount: animeTable.scoreCount
   };
 
-  /** 相关度排序：名称命中位置 → 拼音命中位置，id 作稳定分页 tiebreaker */
-  const relevanceOrderBy = (keyword: string) => {
-    const simplified = t2s(keyword);
-    const pinyinFull = toPinyin(simplified).toLowerCase();
-    return [
-      sql`position(${simplified} in ${animeTable.name})`,
-      sql`position(${pinyinFull} in ${animeTable.namePinyin})`,
-      asc(animeTable.id)
-    ];
+  /** 批量获取番剧的标签与视频信息并附加到行上（保持原有顺序） */
+  const attachMeta = async <T extends { id: string }>(rows: T[]) => {
+    const animeIds = rows.map(a => a.id);
+
+    const [tagRows, videoRows] = await Promise.all([
+      animeIds.length > 0
+        ? db
+            .select({
+              animeId: animeToTagsTable.animeId,
+              tagName: tagsTable.name
+            })
+            .from(animeToTagsTable)
+            .innerJoin(tagsTable, eq(animeToTagsTable.tagId, tagsTable.id))
+            .where(inArray(animeToTagsTable.animeId, animeIds))
+        : [],
+      animeIds.length > 0
+        ? db
+            .select({
+              id: videosTable.id,
+              episode: videosTable.episode,
+              animeId: videosTable.animeId
+            })
+            .from(videosTable)
+            .where(inArray(videosTable.animeId, animeIds))
+            .orderBy(asc(videosTable.episode))
+        : []
+    ]);
+
+    const tagsByAnime = new Map<string, string[]>();
+    for (const r of tagRows) {
+      const list = tagsByAnime.get(r.animeId) ?? [];
+      list.push(r.tagName);
+      tagsByAnime.set(r.animeId, list);
+    }
+
+    const videosByAnime = new Map<string, { id: string; episode: number }[]>();
+    for (const r of videoRows) {
+      const list = videosByAnime.get(r.animeId) ?? [];
+      list.push({ id: r.id, episode: r.episode });
+      videosByAnime.set(r.animeId, list);
+    }
+
+    return rows.map(a => {
+      const videos = videosByAnime.get(a.id) ?? [];
+      return {
+        ...a,
+        tags: tagsByAnime.get(a.id) ?? [],
+        videos,
+        videoCount: videos.length,
+        videoId: videos.length > 0 ? videos[0]!.id : null
+      };
+    });
+  };
+
+  /** 同步番剧变更到搜索索引（best-effort，失败仅告警，不影响主流程） */
+  const syncAnime = async (anime: typeof animeTable.$inferSelect) => {
+    await fastify.animeSearch.syncAnime(anime);
+  };
+
+  const removeFromIndex = async (id: string) => {
+    await fastify.animeSearch.removeAnime(id);
   };
 
   return {
     /** 根据 ID 查找 */
-    async findById(id: number) {
+    async findById(id: string) {
       const [anime] = await db
         .select()
         .from(animeTable)
@@ -85,31 +149,8 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
       return anime ?? null;
     },
 
-    /** 根据名称模糊查找（用于搜索建议） */
-    async findByNameLike(keyword: string, excludeTypes?: AnimeType[]) {
-      const conditions = [
-        nameSearchCondition(keyword),
-        // 与搜索列表保持一致，草稿不对外暴露
-        notInArray(animeTable.status, ['draft'])
-      ];
-      if (excludeTypes?.length) {
-        conditions.push(notInArray(animeTable.type, excludeTypes));
-      }
-
-      return db
-        .select({
-          id: animeTable.id,
-          name: animeTable.name,
-          matchedByName: nameMatchCondition(keyword)
-        })
-        .from(animeTable)
-        .where(and(...conditions))
-        .orderBy(...relevanceOrderBy(keyword))
-        .limit(10);
-    },
-
     /** 根据系列和季查找 */
-    async findBySeriesAndSeason(seriesId: number, season: number) {
+    async findBySeriesAndSeason(seriesId: string, season: number) {
       const [anime] = await db
         .select()
         .from(animeTable)
@@ -123,7 +164,7 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
     /** 创建番剧 */
     async create(anime: AddAnimeBody) {
       const { tags, ...animeData } = anime;
-      return db.transaction(async tx => {
+      const created = await db.transaction(async tx => {
         const [anime] = await tx
           .insert(animeTable)
           .values({
@@ -138,11 +179,15 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
           .values(tags.map(tagId => ({ animeId: anime.id, tagId })));
         return anime;
       });
+
+      await syncAnime(created);
+      return created;
     },
 
     /** 更新番剧 */
-    async update(id: number, anime: UpdateAnimeBody) {
+    async update(id: string, anime: UpdateAnimeBody) {
       const { tags, ...animeData } = anime;
+      let updated: typeof animeTable.$inferSelect | undefined;
       await db.transaction(async tx => {
         if (Object.keys(animeData).length > 0) {
           const updateData: typeof animeData & {
@@ -153,10 +198,11 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
             updateData.namePinyin = toPinyin(animeData.name);
             updateData.nameInitials = toInitials(animeData.name);
           }
-          await tx
+          [updated] = await tx
             .update(animeTable)
             .set(updateData)
-            .where(eq(animeTable.id, id));
+            .where(eq(animeTable.id, id))
+            .returning();
         }
 
         if (tags) {
@@ -168,15 +214,67 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
             .values(tags.map(tagId => ({ animeId: id, tagId })));
         }
       });
+
+      // 名称/状态变更需要同步搜索索引（仅改标签时同步也无害，索引不含标签）
+      if (updated) {
+        await syncAnime(updated);
+      }
     },
 
     /** 删除番剧（关联表均级联删除） */
-    async deleteById(id: number) {
+    async deleteById(id: string) {
       const [deleted] = await db
         .delete(animeTable)
         .where(eq(animeTable.id, id))
         .returning();
+
+      if (deleted) {
+        await removeFromIndex(deleted.id);
+      }
       return deleted ?? null;
+    },
+
+    /** 批量按 ID 获取搜索结果（供 meilisearch 命中后水合标签/视频信息） */
+    async findByIdsWithMeta(ids: string[]) {
+      if (ids.length === 0) return [];
+      const rows = await db
+        .select(clientColumns)
+        .from(animeTable)
+        .where(inArray(animeTable.id, ids));
+      return attachMeta(rows);
+    },
+
+    /** 可被搜索的番剧数量（非草稿，用于启动时校验索引一致性） */
+    async countPublishable() {
+      const [result] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(animeTable)
+        .where(notInArray(animeTable.status, ['draft']));
+      return Number(result?.count ?? 0);
+    },
+
+    /** 按 ID 游标分批获取搜索索引文档（仅非草稿，供全量重建灌入 meilisearch） */
+    async findSearchIndexBatch(afterId: string, limit: number) {
+      return db
+        .select({
+          id: animeTable.id,
+          name: animeTable.name,
+          seasonName: animeTable.seasonName,
+          description: animeTable.description,
+          director: animeTable.director,
+          cv: animeTable.cv,
+          type: animeTable.type,
+          status: animeTable.status
+        })
+        .from(animeTable)
+        .where(
+          and(
+            gt(animeTable.id, afterId),
+            notInArray(animeTable.status, ['draft'])
+          )
+        )
+        .orderBy(asc(animeTable.id))
+        .limit(limit);
     },
 
     /** 查询列表 */
@@ -262,7 +360,7 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
           .where(whereClause)
       ]);
 
-      const tagsByAnime = new Map<number, { id: number; name: string }[]>();
+      const tagsByAnime = new Map<string, { id: string; name: string }[]>();
       for (const r of tagRows) {
         const list = tagsByAnime.get(r.animeId) ?? [];
         list.push({ id: r.tagId, name: r.tagName });
@@ -278,121 +376,38 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
       };
     },
 
-    /** 搜索列表（带视频信息） */
-    async search(
-      keyword: string,
-      page: number,
-      pageSize: number,
-      excludeTypes?: AnimeType[]
-    ) {
-      const conditions = [
-        nameSearchCondition(keyword),
-        notInArray(animeTable.status, ['draft'])
-      ];
-      if (excludeTypes?.length) {
-        conditions.push(notInArray(animeTable.type, excludeTypes));
-      }
-      const whereClause = and(...conditions);
-
-      // 主查询（显式列选择，避免向客户端传输未暴露的字段）
-      const items = await db
+    /** 按 ID 获取季信息（搜索联想展示季后缀用） */
+    async findSeasonByIds(ids: string[]) {
+      if (ids.length === 0)
+        return new Map<string, { season: number; seasonName: string | null }>();
+      const rows = await db
         .select({
           id: animeTable.id,
-          name: animeTable.name,
-          description: animeTable.description,
-          cover: animeTable.cover,
-          status: animeTable.status,
-          type: animeTable.type,
-          director: animeTable.director,
-          cv: animeTable.cv,
-          year: animeTable.year,
-          month: animeTable.month,
-          avgScore: animeTable.avgScore,
-          scoreCount: animeTable.scoreCount,
-          matchedByName: nameMatchCondition(keyword)
+          season: animeTable.season,
+          seasonName: animeTable.seasonName
         })
         .from(animeTable)
-        .where(whereClause)
-        .orderBy(...relevanceOrderBy(keyword))
-        .limit(pageSize)
-        .offset(calcOffset(page, pageSize));
-
-      const animeIds = items.map(a => a.id);
-
-      // 分离查询：标签 + 视频 + 计数（并行，避免 lateral join）
-      const [tagRows, videoRows, countResult] = await Promise.all([
-        animeIds.length > 0
-          ? db
-              .select({
-                animeId: animeToTagsTable.animeId,
-                tagName: tagsTable.name
-              })
-              .from(animeToTagsTable)
-              .innerJoin(tagsTable, eq(animeToTagsTable.tagId, tagsTable.id))
-              .where(inArray(animeToTagsTable.animeId, animeIds))
-          : [],
-        animeIds.length > 0
-          ? db
-              .select({
-                id: videosTable.id,
-                episode: videosTable.episode,
-                animeId: videosTable.animeId
-              })
-              .from(videosTable)
-              .where(inArray(videosTable.animeId, animeIds))
-              .orderBy(asc(videosTable.episode))
-          : [],
-        db
-          .select({ count: sql<number>`count(*)` })
-          .from(animeTable)
-          .where(whereClause)
-      ]);
-
-      const tagsByAnime = new Map<number, string[]>();
-      for (const r of tagRows) {
-        const list = tagsByAnime.get(r.animeId) ?? [];
-        list.push(r.tagName);
-        tagsByAnime.set(r.animeId, list);
-      }
-
-      const videosByAnime = new Map<
-        number,
-        { id: number; episode: number }[]
-      >();
-      for (const r of videoRows) {
-        const list = videosByAnime.get(r.animeId) ?? [];
-        list.push({ id: r.id, episode: r.episode });
-        videosByAnime.set(r.animeId, list);
-      }
-
-      return {
-        items: items.map(a => {
-          const videos = videosByAnime.get(a.id) ?? [];
-          return {
-            ...a,
-            tags: tagsByAnime.get(a.id) ?? [],
-            videos,
-            videoCount: videos.length,
-            videoId: videos.length > 0 ? videos[0].id : null
-          };
-        }),
-        total: Number(countResult[0]?.count ?? 0)
-      };
+        .where(inArray(animeTable.id, ids));
+      return new Map(rows.map(r => [r.id, r]));
     },
 
     /** 查询番剧选项 */
     async findAllOptions() {
-      return (
-        db
-          .select({
-            label: sql<string>`${animeTable.name} || CASE WHEN ${animeTable.seasonName} IS NOT NULL THEN ' ' || ${animeTable.seasonName} WHEN ${animeTable.season} != 1 THEN ' 第' || ${animeTable.season} || '季' ELSE '' END`,
-            value: sql<string>`${animeTable.id}::text`
-          })
-          .from(animeTable)
-          // 草稿未发布，不作为关联选项
-          .where(notInArray(animeTable.status, ['draft']))
-          .orderBy(asc(animeTable.name))
-      );
+      const rows = await db
+        .select({
+          id: animeTable.id,
+          name: animeTable.name,
+          season: animeTable.season,
+          seasonName: animeTable.seasonName
+        })
+        .from(animeTable)
+        // 草稿未发布，不作为关联选项
+        .where(notInArray(animeTable.status, ['draft']))
+        .orderBy(asc(animeTable.name));
+      return rows.map(r => ({
+        label: `${r.name}${buildSeasonSuffix(r.season, r.seasonName)}`,
+        value: r.id
+      }));
     }
   };
 };
@@ -404,6 +419,7 @@ export default fp(
   },
   {
     name: 'anime-repository',
-    dependencies: ['db']
+    // anime-search 先于本插件加载（其 onReady 全量重建需要本插件，但仅运行时懒访问）
+    dependencies: ['db', 'anime-search']
   }
 );
