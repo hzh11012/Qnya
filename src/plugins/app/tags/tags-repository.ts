@@ -18,7 +18,7 @@ const createTagsRepository = (fastify: FastifyInstance) => {
 
   return {
     /** 根据 ID 查找 */
-    async findById(id: number) {
+    async findById(id: string) {
       const [tag] = await db
         .select()
         .from(tagsTable)
@@ -28,7 +28,7 @@ const createTagsRepository = (fastify: FastifyInstance) => {
     },
 
     /** 根据 IDs 查找 */
-    async findByIds(ids: number[]) {
+    async findByIds(ids: string[]) {
       return db.select().from(tagsTable).where(inArray(tagsTable.id, ids));
     },
 

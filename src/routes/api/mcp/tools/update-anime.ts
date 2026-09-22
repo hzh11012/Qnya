@@ -14,10 +14,7 @@ export function registerUpdateAnime(
       description:
         '修改已入库番剧的信息。id 从 list_anime 返回结果中获取。所有字段均为可选，只传需要修改的字段即可。',
       inputSchema: {
-        id: z
-          .number()
-          .int()
-          .describe('番剧 ID，来自 list_anime 返回的 id 字段'),
+        id: z.uuid().describe('番剧 ID，来自 list_anime 返回的 id 字段'),
         name: z.string().optional().describe('番剧名称'),
         description: z.string().optional().describe('番剧简介'),
         remark: z.string().optional().describe('番剧一句话简评，不超过25字'),
@@ -39,7 +36,7 @@ export function registerUpdateAnime(
         director: z.string().optional().describe('导演'),
         cv: z.string().optional().describe('声优列表'),
         tagIds: z
-          .array(z.number().int())
+          .array(z.uuid())
           .optional()
           .describe('标签 ID 列表，传入后会覆盖原有标签，从 list_tags 获取')
       }

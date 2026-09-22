@@ -70,7 +70,7 @@ export const DashboardStatsSchemaResponse = z.object({
   /** 运营数据 — 追番排行 Top 10 */
   topCollections: z.array(
     z.object({
-      animeId: z.number(),
+      animeId: z.uuid(),
       animeName: z.string(),
       cover: z.string(),
       count: z.number()
@@ -79,7 +79,7 @@ export const DashboardStatsSchemaResponse = z.object({
   /** 运营数据 — 最新反馈 (最近 10 条 pending) */
   recentFeedbacks: z.array(
     z.object({
-      id: z.number(),
+      id: z.uuid(),
       animeName: z.string(),
       type: z.string(),
       content: z.string(),
@@ -89,7 +89,7 @@ export const DashboardStatsSchemaResponse = z.object({
   /** 运营数据 — 最新评分 (最近 10 条) */
   recentScores: z.array(
     z.object({
-      id: z.number(),
+      id: z.uuid(),
       userName: z.string(),
       animeName: z.string(),
       score: z.number(),

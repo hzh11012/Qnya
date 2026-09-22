@@ -31,7 +31,7 @@ export function registerListAnime(server: McpServer, fastify: FastifyInstance) {
           .optional()
           .describe('季度筛选，可多选'),
         tagIds: z
-          .array(z.number().int())
+          .array(z.uuid())
           .optional()
           .describe('标签 ID 筛选，同时满足所有传入标签'),
         page: z.number().optional().default(1),

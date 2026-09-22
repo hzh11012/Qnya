@@ -29,7 +29,7 @@ const createUsersRepository = (fastify: FastifyInstance) => {
     },
 
     /** 通过 id 查找用户 */
-    async findById(id: number) {
+    async findById(id: string) {
       const [user] = await db
         .select()
         .from(usersTable)
@@ -101,7 +101,7 @@ const createUsersRepository = (fastify: FastifyInstance) => {
     },
 
     /** 更新用户信息（字段已由 Zod Schema 白名单过滤） */
-    async update(id: number, data: UpdateUserBody) {
+    async update(id: string, data: UpdateUserBody) {
       const [user] = await db
         .update(usersTable)
         .set(data)

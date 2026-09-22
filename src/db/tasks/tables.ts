@@ -1,12 +1,12 @@
 import { bigint, index, integer, pgTable, varchar } from 'drizzle-orm/pg-core';
-import { timestamps } from '../columns.helpers.js';
+import { idColumn, timestamps } from '../columns.helpers.js';
 import { taskStatusEnum } from './enum.js';
 
 /** 任务表 */
 export const tasksTable = pgTable(
   'tasks',
   {
-    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    id: idColumn(),
 
     // === qBit 信息 ===
     /** 种子hash */

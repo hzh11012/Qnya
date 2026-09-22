@@ -9,6 +9,7 @@ import type {
 import { calcOffset, buildOrderBy } from '../../../utils/paginated-query.js';
 import { escapeLike } from '../../../utils/like.js';
 import { t2s } from '../../../utils/t2s.js';
+import { buildSeasonSuffix } from '../../../utils/season.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -87,7 +88,7 @@ const createFeedbackRepository = (fastify: FastifyInstance) => {
             ...rest,
             user: { name: userName },
             anime: {
-              name: `${animeName}${animeSeasonName ? ` ${animeSeasonName}` : animeSeason !== 1 ? ` 第${animeSeason}季` : ''}`,
+              name: `${animeName}${buildSeasonSuffix(animeSeason, animeSeasonName)}`,
               cover: animeCover
             }
           })
@@ -97,7 +98,7 @@ const createFeedbackRepository = (fastify: FastifyInstance) => {
     },
 
     /** 根据ID查询反馈 */
-    async findById(id: number) {
+    async findById(id: string) {
       const [feedback] = await db
         .select()
         .from(feedbackTable)
@@ -107,7 +108,7 @@ const createFeedbackRepository = (fastify: FastifyInstance) => {
     },
 
     /** 更新反馈 */
-    async update(id: number, data: UpdateFeedbackBody) {
+    async update(id: string, data: UpdateFeedbackBody) {
       const [updated] = await db
         .update(feedbackTable)
         .set(data)
@@ -117,7 +118,7 @@ const createFeedbackRepository = (fastify: FastifyInstance) => {
     },
 
     /** 删除反馈 */
-    async deleteById(id: number) {
+    async deleteById(id: string) {
       const [deleted] = await db
         .delete(feedbackTable)
         .where(eq(feedbackTable.id, id))

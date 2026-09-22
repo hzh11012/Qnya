@@ -1,12 +1,13 @@
 import {
   index,
   integer,
+  uuid,
   pgTable,
   real,
   unique,
   varchar
 } from 'drizzle-orm/pg-core';
-import { timestamps } from '../columns.helpers.js';
+import { idColumn, timestamps } from '../columns.helpers.js';
 import { animeTable } from '../anime/index.js';
 
 /** 视频表 */
@@ -14,9 +15,9 @@ export const videosTable = pgTable(
   'videos',
   {
     /** 视频ID */
-    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    id: idColumn(),
     /** 动漫ID (外键) */
-    animeId: integer('anime_id')
+    animeId: uuid('anime_id')
       .notNull()
       .references(() => animeTable.id, { onDelete: 'cascade' }),
     /** 视频标题 */

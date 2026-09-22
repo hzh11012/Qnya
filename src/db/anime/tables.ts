@@ -1,6 +1,7 @@
 import {
   index,
   integer,
+  uuid,
   pgTable,
   real,
   smallint,
@@ -9,7 +10,7 @@ import {
   varchar
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { timestamps } from '../columns.helpers.js';
+import { idColumn, timestamps } from '../columns.helpers.js';
 import { animeMonthEnum, animeStatusEnum, animeTypeEnum } from './enums.js';
 import { seriesTable } from '../series/index.js';
 
@@ -18,9 +19,9 @@ export const animeTable = pgTable(
   'anime',
   {
     /** 动漫ID */
-    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    id: idColumn(),
     /** 所属系列ID (外键) */
-    seriesId: integer('series_id')
+    seriesId: uuid('series_id')
       .notNull()
       .references(() => seriesTable.id, { onDelete: 'cascade' }),
     /** 动漫名 */

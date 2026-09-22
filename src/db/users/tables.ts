@@ -1,19 +1,12 @@
-import {
-  index,
-  integer,
-  text,
-  boolean,
-  pgTable,
-  varchar
-} from 'drizzle-orm/pg-core';
-import { timestamps } from '../columns.helpers.js';
+import { index, text, boolean, pgTable, varchar } from 'drizzle-orm/pg-core';
+import { idColumn, timestamps } from '../columns.helpers.js';
 import { userRoleEnum } from './enums.js';
 
 /** 用户表 */
 export const usersTable = pgTable(
   'users',
   {
-    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    id: idColumn(),
     name: varchar({ length: 255 }).notNull(),
     email: varchar({ length: 255 }).notNull().unique(),
     role: userRoleEnum().notNull().default('guest'),

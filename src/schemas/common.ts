@@ -6,9 +6,9 @@ import { z } from 'zod';
 export const EmailSchema = z.email().min(1).max(255);
 
 /**
- * ID Schema
+ * ID Schema（UUID，各表主键/外键均为 UUIDv7）
  */
-export const IdSchema = z.coerce.number().min(1);
+export const IdSchema = z.uuid();
 
 /**
  * 成功响应 Schema

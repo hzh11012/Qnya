@@ -50,6 +50,13 @@
       "when": 1789578500133,
       "tag": "0006_daily_the_hunter",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790097434845,
+      "tag": "0007_fantastic_nextwave",
+      "breakpoints": true
     }
   ]
 }

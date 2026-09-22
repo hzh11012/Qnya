@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm';
-import { index, integer, pgTable, primaryKey } from 'drizzle-orm/pg-core';
+import { index, pgTable, primaryKey, uuid } from 'drizzle-orm/pg-core';
 import { timestamps } from './columns.helpers.js';
 import { animeTable } from './anime/index.js';
 import { tagsTable } from './tags/index.js';
@@ -22,11 +22,11 @@ export const animeToTagsTable = pgTable(
   'anime_to_tags',
   {
     /** 动漫ID */
-    animeId: integer('anime_id')
+    animeId: uuid('anime_id')
       .notNull()
       .references(() => animeTable.id, { onDelete: 'cascade' }),
     /** 分类ID */
-    tagId: integer('tag_id')
+    tagId: uuid('tag_id')
       .notNull()
       .references(() => tagsTable.id, { onDelete: 'cascade' }),
     ...timestamps
@@ -43,11 +43,11 @@ export const animeToTopicsTable = pgTable(
   'anime_to_topics',
   {
     /** 动漫ID */
-    animeId: integer('anime_id')
+    animeId: uuid('anime_id')
       .notNull()
       .references(() => animeTable.id, { onDelete: 'cascade' }),
     /** 专题ID */
-    topicId: integer('topic_id')
+    topicId: uuid('topic_id')
       .notNull()
       .references(() => topicsTable.id, { onDelete: 'cascade' }),
     ...timestamps

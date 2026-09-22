@@ -9,6 +9,7 @@ import type {
 } from '../../../schemas/videos.js';
 import { calcOffset, buildOrderBy } from '../../../utils/paginated-query.js';
 import { escapeLike } from '../../../utils/like.js';
+import { buildSeasonSuffix } from '../../../utils/season.js';
 import { t2s } from '../../../utils/t2s.js';
 
 declare module 'fastify' {
@@ -75,7 +76,7 @@ const createVideosRepository = (fastify: FastifyInstance) => {
           }) => ({
             ...rest,
             anime: {
-              name: `${animeName}${animeSeasonName ? ` ${animeSeasonName}` : animeSeason !== 1 ? ` 第${animeSeason}季` : ''}`,
+              name: `${animeName}${buildSeasonSuffix(animeSeason, animeSeasonName)}`,
               cover: animeCover
             }
           })
@@ -85,7 +86,7 @@ const createVideosRepository = (fastify: FastifyInstance) => {
     },
 
     /** 根据 ID 查找视频 */
-    async findById(id: number) {
+    async findById(id: string) {
       const [video] = await db
         .select()
         .from(videosTable)
@@ -95,7 +96,7 @@ const createVideosRepository = (fastify: FastifyInstance) => {
     },
 
     /** 根据 animeId 和 episode 查找视频 */
-    async findByAnimeIdAndEpisode(animeId: number, episode: number) {
+    async findByAnimeIdAndEpisode(animeId: string, episode: number) {
       const [video] = await db
         .select()
         .from(videosTable)
@@ -116,7 +117,7 @@ const createVideosRepository = (fastify: FastifyInstance) => {
     },
 
     /** 更新视频 */
-    async update(id: number, data: UpdateVideoBody) {
+    async update(id: string, data: UpdateVideoBody) {
       const [updated] = await db
         .update(videosTable)
         .set(data)
@@ -126,7 +127,7 @@ const createVideosRepository = (fastify: FastifyInstance) => {
     },
 
     /** 删除视频 */
-    async deleteById(id: number) {
+    async deleteById(id: string) {
       const [deleted] = await db
         .delete(videosTable)
         .where(eq(videosTable.id, id))

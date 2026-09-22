@@ -1,5 +1,5 @@
-import { index, integer, pgTable, real, varchar } from 'drizzle-orm/pg-core';
-import { timestamps } from '../columns.helpers.js';
+import { index, pgTable, real, uuid, varchar } from 'drizzle-orm/pg-core';
+import { idColumn, timestamps } from '../columns.helpers.js';
 import { usersTable } from '../users/index.js';
 import { videosTable } from '../videos/index.js';
 import { danmakuTypeEnum } from './enums.js';
@@ -9,13 +9,13 @@ export const danmakuTable = pgTable(
   'danmaku',
   {
     /** 弹幕ID */
-    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    id: idColumn(),
     /** 用户ID (外键) */
-    userId: integer('user_id')
+    userId: uuid('user_id')
       .notNull()
       .references(() => usersTable.id, { onDelete: 'cascade' }),
     /** 视频ID (外键) */
-    videoId: integer('video_id')
+    videoId: uuid('video_id')
       .notNull()
       .references(() => videosTable.id, { onDelete: 'cascade' }),
     /** 弹幕内容 */

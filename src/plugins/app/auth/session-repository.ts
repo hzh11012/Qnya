@@ -3,7 +3,7 @@ import fp from 'fastify-plugin';
 import { createHash, randomBytes } from 'node:crypto';
 
 export interface SessionData {
-  userId: number;
+  userId: string;
   email: string;
   status: boolean;
   role: string;
@@ -51,7 +51,7 @@ const createSessionRepository = (fastify: FastifyInstance) => {
      * 构建用户 sessions key
      * @param userId 用户ID
      */
-    buildUserIndexKey(userId: number): string {
+    buildUserIndexKey(userId: string): string {
       return `${USER_SESSIONS_PREFIX}${userId}`;
     },
 
@@ -71,7 +71,7 @@ const createSessionRepository = (fastify: FastifyInstance) => {
      * 创建 session
      */
     async createSession(
-      userId: number,
+      userId: string,
       email: string,
       status: boolean,
       role: string
@@ -177,7 +177,7 @@ const createSessionRepository = (fastify: FastifyInstance) => {
      * 删除用户所有 session
      * @param userId 用户ID
      */
-    async deleteAllUserSessions(userId: number) {
+    async deleteAllUserSessions(userId: string) {
       const userIndexKey = this.buildUserIndexKey(userId);
 
       // zset 中存的是已哈希的 token
@@ -197,7 +197,7 @@ const createSessionRepository = (fastify: FastifyInstance) => {
      * @param updater 更新函数
      */
     async batchUpdateUserSessions(
-      userId: number,
+      userId: string,
       updater: (session: SessionData) => void
     ) {
       const userIndexKey = this.buildUserIndexKey(userId);
@@ -248,7 +248,7 @@ const createSessionRepository = (fastify: FastifyInstance) => {
      * @param userId 用户ID
      * @param status 状态
      */
-    async refreshUserSessionsStatus(userId: number, status: boolean) {
+    async refreshUserSessionsStatus(userId: string, status: boolean) {
       return this.batchUpdateUserSessions(userId, session => {
         session.status = status;
       });
@@ -259,7 +259,7 @@ const createSessionRepository = (fastify: FastifyInstance) => {
      * @param userId 用户ID
      * @param role 角色
      */
-    async refreshUserSessionsRole(userId: number, role: string) {
+    async refreshUserSessionsRole(userId: string, role: string) {
       return this.batchUpdateUserSessions(userId, session => {
         session.role = role;
       });

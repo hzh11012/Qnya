@@ -83,7 +83,7 @@ const createScoresRepository = (fastify: FastifyInstance) => {
     },
 
     /** 根据ID查询评分 */
-    async findById(id: number) {
+    async findById(id: string) {
       const [score] = await db
         .select()
         .from(scoresTable)
@@ -93,7 +93,7 @@ const createScoresRepository = (fastify: FastifyInstance) => {
     },
 
     /** 更新评分（字段已由 Zod Schema 白名单过滤） */
-    async update(id: number, data: UpdateScoreBody) {
+    async update(id: string, data: UpdateScoreBody) {
       const [updated] = await db
         .update(scoresTable)
         .set(data)
@@ -103,7 +103,7 @@ const createScoresRepository = (fastify: FastifyInstance) => {
     },
 
     /** 删除评分 */
-    async deleteById(id: number) {
+    async deleteById(id: string) {
       const [deleted] = await db
         .delete(scoresTable)
         .where(eq(scoresTable.id, id))

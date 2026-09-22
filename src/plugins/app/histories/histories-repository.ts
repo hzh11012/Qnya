@@ -10,6 +10,7 @@ import { eq, sql, and, inArray, like } from 'drizzle-orm';
 import type { HistoryListQuery } from '../../../schemas/histories.js';
 import { calcOffset, buildOrderBy } from '../../../utils/paginated-query.js';
 import { escapeLike } from '../../../utils/like.js';
+import { buildSeasonSuffix } from '../../../utils/season.js';
 import { t2s } from '../../../utils/t2s.js';
 
 declare module 'fastify' {
@@ -79,7 +80,7 @@ const createHistoriesRepository = (fastify: FastifyInstance) => {
             ...rest,
             user: { name: userName },
             anime: {
-              name: `${animeName}${animeSeasonName ? ` ${animeSeasonName}` : animeSeason !== 1 ? ` 第${animeSeason}季` : ''} (第${videoEpisode}集)`,
+              name: `${animeName}${buildSeasonSuffix(animeSeason, animeSeasonName)} (第${videoEpisode}集)`,
               cover: animeCover
             }
           })
@@ -89,7 +90,7 @@ const createHistoriesRepository = (fastify: FastifyInstance) => {
     },
 
     /** 根据 ID 查找观看记录 */
-    async findById(id: number) {
+    async findById(id: string) {
       const [history] = await db
         .select()
         .from(historiesTable)
@@ -99,7 +100,7 @@ const createHistoriesRepository = (fastify: FastifyInstance) => {
     },
 
     /** 根据 userId 和 videoId 查找观看记录 */
-    async findByUserIdAndVideoId(userId: number, videoId: number) {
+    async findByUserIdAndVideoId(userId: string, videoId: string) {
       const [history] = await db
         .select()
         .from(historiesTable)
@@ -114,7 +115,7 @@ const createHistoriesRepository = (fastify: FastifyInstance) => {
     },
 
     /** 删除观看记录 */
-    async deleteById(id: number) {
+    async deleteById(id: string) {
       const [deleted] = await db
         .delete(historiesTable)
         .where(eq(historiesTable.id, id))

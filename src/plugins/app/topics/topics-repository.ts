@@ -13,6 +13,7 @@ import type {
 } from '../../../schemas/topics.js';
 import { calcOffset, buildOrderBy } from '../../../utils/paginated-query.js';
 import { escapeLike } from '../../../utils/like.js';
+import { buildSeasonSuffix } from '../../../utils/season.js';
 import { t2s } from '../../../utils/t2s.js';
 
 declare module 'fastify' {
@@ -85,12 +86,12 @@ const createTopicsRepository = (fastify: FastifyInstance) => {
               .where(inArray(animeToTopicsTable.topicId, topicIds))
           : [];
 
-      const animeByTopic = new Map<number, { id: number; name: string }[]>();
+      const animeByTopic = new Map<string, { id: string; name: string }[]>();
       for (const r of animeRows) {
         const list = animeByTopic.get(r.topicId) ?? [];
         list.push({
           id: r.animeId,
-          name: `${r.animeName}${r.animeSeasonName ? ` ${r.animeSeasonName}` : r.animeSeason !== 1 ? ` 第${r.animeSeason}季` : ''}`
+          name: `${r.animeName}${buildSeasonSuffix(r.animeSeason, r.animeSeasonName)}`
         });
         animeByTopic.set(r.topicId, list);
       }
@@ -105,7 +106,7 @@ const createTopicsRepository = (fastify: FastifyInstance) => {
     },
 
     /** 根据ID查询专题 */
-    async findById(id: number) {
+    async findById(id: string) {
       const [topic] = await db
         .select()
         .from(topicsTable)
@@ -144,7 +145,7 @@ const createTopicsRepository = (fastify: FastifyInstance) => {
     },
 
     /** 更新专题 */
-    async update(id: number, data: UpdateTopicBody) {
+    async update(id: string, data: UpdateTopicBody) {
       const { animeIds, ...topicData } = data;
       await db.transaction(async tx => {
         if (Object.keys(topicData).length > 0) {
@@ -169,7 +170,7 @@ const createTopicsRepository = (fastify: FastifyInstance) => {
     },
 
     /** 删除专题 */
-    async deleteById(id: number) {
+    async deleteById(id: string) {
       const [deleted] = await db
         .delete(topicsTable)
         .where(eq(topicsTable.id, id))

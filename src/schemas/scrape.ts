@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { IdSchema } from './common.js';
 
 export const MediaTypeSchema = z.enum(['tv', 'movie']);
 
@@ -21,7 +20,7 @@ export const ScrapeSearchItemSchema = z.object({
 export const ScrapeSearchSchemaResponse = z.array(ScrapeSearchItemSchema);
 
 export const ScrapeDetailSchema = z.object({
-  tmdbId: IdSchema,
+  tmdbId: z.coerce.number().int().min(1),
   mediaType: MediaTypeSchema.default('tv'),
   season: z.coerce.number().min(1).optional().default(1),
   language: z.string().optional().default('zh-CN')

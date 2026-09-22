@@ -18,7 +18,7 @@ const createSeriesRepository = (fastify: FastifyInstance) => {
 
   return {
     /** 根据 ID 查找 */
-    async findById(id: number) {
+    async findById(id: string) {
       const [series] = await db
         .select()
         .from(seriesTable)
@@ -84,7 +84,7 @@ const createSeriesRepository = (fastify: FastifyInstance) => {
               .where(inArray(animeTable.seriesId, seriesIds))
           : [];
 
-      const animeBySeries = new Map<number, typeof animeRows>();
+      const animeBySeries = new Map<string, typeof animeRows>();
       for (const a of animeRows) {
         const list = animeBySeries.get(a.seriesId) ?? [];
         list.push(a);
@@ -101,7 +101,7 @@ const createSeriesRepository = (fastify: FastifyInstance) => {
     },
 
     /** 删除系列 */
-    async deleteById(id: number) {
+    async deleteById(id: string) {
       const [deleted] = await db
         .delete(seriesTable)
         .where(eq(seriesTable.id, id))

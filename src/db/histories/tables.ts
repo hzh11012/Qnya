@@ -1,5 +1,5 @@
-import { index, integer, pgTable, real, unique } from 'drizzle-orm/pg-core';
-import { timestamps } from '../columns.helpers.js';
+import { index, pgTable, real, unique, uuid } from 'drizzle-orm/pg-core';
+import { idColumn, timestamps } from '../columns.helpers.js';
 import { usersTable } from '../users/index.js';
 import { videosTable } from '../videos/tables.js';
 
@@ -8,13 +8,13 @@ export const historiesTable = pgTable(
   'histories',
   {
     /** 历史记录ID */
-    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    id: idColumn(),
     /** 用户ID (外键) */
-    userId: integer('user_id')
+    userId: uuid('user_id')
       .notNull()
       .references(() => usersTable.id, { onDelete: 'cascade' }),
     /** 视频ID (外键) */
-    videoId: integer('video_id')
+    videoId: uuid('video_id')
       .notNull()
       .references(() => videosTable.id, { onDelete: 'cascade' }),
     /** 历史记录视频时间 */

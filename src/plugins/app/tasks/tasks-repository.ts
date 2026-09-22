@@ -26,7 +26,7 @@ const createTasksRepository = (fastify: FastifyInstance) => {
 
   return {
     /** 根据 ID 查找 */
-    async findById(id: number) {
+    async findById(id: string) {
       const [task] = await db
         .select()
         .from(tasksTable)
@@ -97,7 +97,7 @@ const createTasksRepository = (fastify: FastifyInstance) => {
     },
 
     /** 标记已成功 */
-    async markCompleted(id: number) {
+    async markCompleted(id: string) {
       const [updated] = await db
         .update(tasksTable)
         .set({ status: 'completed' })
@@ -107,7 +107,7 @@ const createTasksRepository = (fastify: FastifyInstance) => {
     },
 
     /** 删除单个记录 */
-    async deleteById(id: number) {
+    async deleteById(id: string) {
       const [deleted] = await db
         .delete(tasksTable)
         .where(eq(tasksTable.id, id))

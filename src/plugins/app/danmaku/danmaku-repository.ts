@@ -10,6 +10,7 @@ import { and, eq, like, sql } from 'drizzle-orm';
 import type { DanmakuListQuery } from '../../../schemas/danmaku.js';
 import { calcOffset, buildOrderBy } from '../../../utils/paginated-query.js';
 import { escapeLike } from '../../../utils/like.js';
+import { buildSeasonSuffix } from '../../../utils/season.js';
 import { t2s } from '../../../utils/t2s.js';
 
 declare module 'fastify' {
@@ -85,7 +86,7 @@ const createDanmakuRepository = (fastify: FastifyInstance) => {
             ...rest,
             user: { name: userName },
             anime: {
-              name: `${animeName}${animeSeasonName ? ` ${animeSeasonName}` : animeSeason !== 1 ? ` 第${animeSeason}季` : ''} (第${videoEpisode}集)`,
+              name: `${animeName}${buildSeasonSuffix(animeSeason, animeSeasonName)} (第${videoEpisode}集)`,
               cover: animeCover
             }
           })
@@ -95,7 +96,7 @@ const createDanmakuRepository = (fastify: FastifyInstance) => {
     },
 
     /** 根据ID查询弹幕 */
-    async findById(id: number) {
+    async findById(id: string) {
       const [danmaku] = await db
         .select()
         .from(danmakuTable)
@@ -105,7 +106,7 @@ const createDanmakuRepository = (fastify: FastifyInstance) => {
     },
 
     /** 删除弹幕 */
-    async deleteById(id: number) {
+    async deleteById(id: string) {
       const [deleted] = await db
         .delete(danmakuTable)
         .where(eq(danmakuTable.id, id))

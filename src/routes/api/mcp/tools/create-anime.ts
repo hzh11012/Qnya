@@ -38,7 +38,7 @@ export function registerCreateAnime(
         director: z.string().optional().default('未知').describe('导演'),
         cv: z.string().optional().default('未知').describe('声优列表'),
         tagIds: z
-          .array(z.number())
+          .array(z.uuid())
           .optional()
           .default([])
           .describe('从 list_tags 返回的标签 ID 列表，挑选符合题材的填入')
@@ -63,7 +63,7 @@ export function registerCreateAnime(
     }) => {
       // 系列不存在则自动创建
       const existingSeries = await seriesRepository.findByName(seriesName);
-      let seriesId: number;
+      let seriesId: string;
       if (existingSeries) {
         seriesId = existingSeries.id;
       } else {

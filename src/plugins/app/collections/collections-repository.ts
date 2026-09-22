@@ -5,6 +5,7 @@ import { eq, inArray, like, sql } from 'drizzle-orm';
 import type { CollectionListQuery } from '../../../schemas/collections.js';
 import { calcOffset, buildOrderBy } from '../../../utils/paginated-query.js';
 import { escapeLike } from '../../../utils/like.js';
+import { buildSeasonSuffix } from '../../../utils/season.js';
 import { t2s } from '../../../utils/t2s.js';
 
 declare module 'fastify' {
@@ -72,7 +73,7 @@ const createCollectionsRepository = (fastify: FastifyInstance) => {
             ...rest,
             user: { name: userName },
             anime: {
-              name: `${animeName}${animeSeasonName ? ` ${animeSeasonName}` : animeSeason !== 1 ? ` 第${animeSeason}季` : ''}`,
+              name: `${animeName}${buildSeasonSuffix(animeSeason, animeSeasonName)}`,
               cover: animeCover
             }
           })
@@ -82,7 +83,7 @@ const createCollectionsRepository = (fastify: FastifyInstance) => {
     },
 
     /** 删除追番 */
-    async deleteById(id: number) {
+    async deleteById(id: string) {
       const [deleted] = await db
         .delete(collectionsTable)
         .where(eq(collectionsTable.id, id))

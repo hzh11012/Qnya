@@ -1,10 +1,10 @@
-import { boolean, integer, pgTable, text, varchar } from 'drizzle-orm/pg-core';
-import { timestamps } from '../columns.helpers.js';
+import { boolean, pgTable, text, varchar } from 'drizzle-orm/pg-core';
+import { idColumn, timestamps } from '../columns.helpers.js';
 
 /** 专题表 */
 export const topicsTable = pgTable('topics', {
   /** 专题ID */
-  id: integer().primaryKey().generatedAlwaysAsIdentity(),
+  id: idColumn(),
   /** 专题名 */
   name: varchar({ length: 50 }).notNull().unique(),
   /** 专题描述 */
