@@ -5,7 +5,7 @@ import {
   animeToTopicsTable,
   animeTable
 } from '../../../db/index.js';
-import { and, eq, inArray, like, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, like, sql } from 'drizzle-orm';
 import type {
   TopicListQuery,
   AddTopicBody,
@@ -15,7 +15,6 @@ import { calcOffset, buildOrderBy } from '../../../utils/paginated-query.js';
 import { escapeLike } from '../../../utils/like.js';
 import { buildSeasonSuffix } from '../../../utils/season.js';
 import { t2s } from '../../../utils/t2s.js';
-
 declare module 'fastify' {
   interface FastifyInstance {
     topicsRepository: ReturnType<typeof createTopicsRepository>;
@@ -169,6 +168,83 @@ const createTopicsRepository = (fastify: FastifyInstance) => {
       });
     },
 
+    /** 客户端：已发布专题分页（含番剧数量） */
+    async findPublished(params: { page: number; pageSize: number }) {
+      const { page, pageSize } = params;
+      const where = eq(topicsTable.status, true);
+
+      const [topics, countResult] = await Promise.all([
+        db
+          .select({
+            id: topicsTable.id,
+            name: topicsTable.name,
+            description: topicsTable.description,
+            cover: topicsTable.cover,
+            animeCount: sql<number>`count(${animeToTopicsTable.animeId})`
+          })
+          .from(topicsTable)
+          .leftJoin(
+            animeToTopicsTable,
+            eq(animeToTopicsTable.topicId, topicsTable.id)
+          )
+          .where(where)
+          .groupBy(topicsTable.id)
+          .orderBy(desc(topicsTable.createdAt))
+          .limit(pageSize)
+          .offset(calcOffset(page, pageSize)),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(topicsTable)
+          .where(where)
+      ]);
+
+      return {
+        items: topics.map(t => ({
+          ...t,
+          animeCount: Number(t.animeCount)
+        })),
+        total: Number(countResult[0]?.count ?? 0)
+      };
+    },
+
+    /** 客户端：已发布专题详情（含关联番剧，按加入顺序） */
+    async findPublishedDetail(id: string, excludeTypes: string[] = []) {
+      const topic = await this.findById(id);
+      if (!topic || !topic.status) return null;
+
+      const rows = await db
+        .select({ animeId: animeToTopicsTable.animeId })
+        .from(animeToTopicsTable)
+        .where(eq(animeToTopicsTable.topicId, id))
+        .orderBy(asc(animeToTopicsTable.createdAt));
+
+      const ids = rows.map(r => r.animeId);
+      const animes =
+        ids.length > 0
+          ? await fastify.animeRepository.findByIdsWithMeta(ids)
+          : [];
+
+      const byId = new Map(animes.map(a => [a.id, a]));
+      const anime = ids
+        .map(animeId => byId.get(animeId))
+        .filter((a): a is NonNullable<typeof a> => !!a)
+        // 过滤草稿与角色无权查看的类型
+        .filter(a => a.status !== 'draft' && !excludeTypes.includes(a.type))
+        // 展示文案 = 名称 + 季后缀（与搜索列表一致）
+        .map(a => ({
+          ...a,
+          name: a.name + buildSeasonSuffix(a.season, a.seasonName)
+        }));
+
+      return {
+        id: topic.id,
+        name: topic.name,
+        description: topic.description,
+        cover: topic.cover,
+        anime
+      };
+    },
+
     /** 删除专题 */
     async deleteById(id: string) {
       const [deleted] = await db
@@ -187,6 +263,6 @@ export default fp(
   },
   {
     name: 'topics-repository',
-    dependencies: ['db']
+    dependencies: ['db', 'anime-repository']
   }
 );

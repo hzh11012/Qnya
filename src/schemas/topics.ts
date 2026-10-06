@@ -67,3 +67,61 @@ export const TopicListSchemaResponse = z.object({
   ),
   total: z.number()
 });
+
+// ============================================
+// 客户端专题接口
+// ============================================
+
+export const ClientTopicListQuerySchema = z.object({
+  ...PaginationQuerySchema
+});
+
+export type ClientTopicListQuery = z.infer<typeof ClientTopicListQuerySchema>;
+
+export const ClientTopicListResponseSchema = z.object({
+  items: z.array(
+    z.object({
+      id: IdSchema,
+      name: z.string(),
+      description: z.string(),
+      cover: z.string(),
+      animeCount: z.number()
+    })
+  ),
+  total: z.number()
+});
+
+export const ClientTopicDetailParamsSchema = z.object({
+  id: IdSchema
+});
+
+export type ClientTopicDetailParams = z.infer<
+  typeof ClientTopicDetailParamsSchema
+>;
+
+export const ClientTopicDetailResponseSchema = z.object({
+  id: IdSchema,
+  name: z.string(),
+  description: z.string(),
+  cover: z.string(),
+  anime: z.array(
+    z.object({
+      id: IdSchema,
+      name: z.string(),
+      description: z.string(),
+      cover: z.string(),
+      status: z.string(),
+      type: z.string(),
+      director: z.string(),
+      cv: z.string(),
+      year: z.number(),
+      month: z.string(),
+      tags: z.array(z.string()),
+      avgScore: z.number(),
+      scoreCount: z.number(),
+      videoCount: z.number(),
+      videoId: IdSchema.nullable(),
+      videos: z.array(z.object({ id: IdSchema, episode: z.number() }))
+    })
+  )
+});

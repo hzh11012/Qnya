@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { IdSchema, PaginationQuerySchema } from './common.js';
+import { IdSchema, PaginationQuerySchema, ArrayQuerySchema } from './common.js';
 
 const animeStatus = ['draft', 'upcoming', 'airing', 'completed'] as const;
 const animeType = [
@@ -66,21 +66,19 @@ export const AnimeListSchema = z.preprocess(
     keyword: z.string().optional(),
     sort: z.enum(['createdAt']).default('createdAt'),
     order: z.enum(['asc', 'desc']).default('desc'),
-    status: z.array(z.enum(animeStatus)).optional(),
-    types: z.array(z.enum(animeType)).optional(),
-    tags: z.array(IdSchema).optional(),
-    years: z
-      .array(
-        z
-          .enum(
-            Array.from({ length: new Date().getFullYear() - 1988 }, (_, i) =>
-              String(1990 + i)
-            )
+    status: ArrayQuerySchema(z.enum(animeStatus)),
+    types: ArrayQuerySchema(z.enum(animeType)),
+    tags: ArrayQuerySchema(IdSchema),
+    years: ArrayQuerySchema(
+      z
+        .enum(
+          Array.from({ length: new Date().getFullYear() - 1988 }, (_, i) =>
+            String(1990 + i)
           )
-          .transform(val => parseInt(val, 10))
-      )
-      .optional(),
-    months: z.array(z.enum(animeMonth)).optional()
+        )
+        .transform(val => parseInt(val, 10))
+    ),
+    months: ArrayQuerySchema(z.enum(animeMonth))
   })
 );
 

@@ -1,15 +1,15 @@
 import { z } from 'zod';
-import { IdSchema, PaginationQuerySchema } from './common.js';
+import { IdSchema, PaginationQuerySchema, ArrayQuerySchema } from './common.js';
 
 export const FeedbackListSchema = z.preprocess(
   val => val ?? {},
   z.object({
     ...PaginationQuerySchema,
     keyword: z.string().optional(),
-    type: z
-      .array(z.enum(['consultation', 'suggestion', 'complaint', 'other']))
-      .optional(),
-    status: z.array(z.enum(['pending', 'processing', 'done'])).optional(),
+    type: ArrayQuerySchema(
+      z.enum(['consultation', 'suggestion', 'complaint', 'other'])
+    ),
+    status: ArrayQuerySchema(z.enum(['pending', 'processing', 'done'])),
     sort: z.enum(['createdAt']).default('createdAt'),
     order: z.enum(['asc', 'desc']).default('desc')
   })
