@@ -28,7 +28,8 @@ const SearchVideoItemSchema = z.object({
   episode: z.number()
 });
 
-export const SearchListItemSchema = z.object({
+/** 搜索/热门等客户端番剧卡片的公共字段 */
+export const SearchAnimeItemSchema = z.object({
   id: IdSchema,
   name: z.string(),
   description: z.string(),
@@ -44,8 +45,11 @@ export const SearchListItemSchema = z.object({
   scoreCount: z.number(),
   videoCount: z.number(),
   videoId: IdSchema.nullable(),
-  highlightName: z.string(),
   videos: z.array(SearchVideoItemSchema)
+});
+
+export const SearchListItemSchema = SearchAnimeItemSchema.extend({
+  highlightName: z.string()
 });
 
 export const SearchListResponseSchema = z.object({

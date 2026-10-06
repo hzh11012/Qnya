@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { IdSchema, PaginationQuerySchema, ArrayQuerySchema } from './common.js';
+import { SearchAnimeItemSchema } from './search.js';
 
 const animeStatus = ['draft', 'upcoming', 'airing', 'completed'] as const;
 const animeType = [
@@ -113,5 +114,18 @@ export const AnimeListSchemaResponse = z.object({
       createdAt: z.date()
     })
   ),
+  total: z.number()
+});
+
+/** 热门列表 query：按评分人数排序 */
+export const ClientHotQuerySchema = z.object({
+  ...PaginationQuerySchema
+});
+
+export type ClientHotQuery = z.infer<typeof ClientHotQuerySchema>;
+
+/** 热门列表响应：条目结构与搜索结果一致（无高亮字段） */
+export const ClientHotResponseSchema = z.object({
+  items: z.array(SearchAnimeItemSchema),
   total: z.number()
 });

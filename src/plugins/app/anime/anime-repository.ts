@@ -1,12 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
+import type { AnimeType } from '../../../db/index.js';
 import {
   animeTable,
   animeToTagsTable,
   tagsTable,
   videosTable
 } from '../../../db/index.js';
-import { and, asc, eq, gt, inArray, notInArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, notInArray, sql } from 'drizzle-orm';
 import {
   AddAnimeBody,
   AnimeListQuery,
@@ -389,6 +390,42 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
         .from(animeTable)
         .where(inArray(animeTable.id, ids));
       return new Map(rows.map(r => [r.id, r]));
+    },
+
+    /** 热门列表：非草稿，按评分人数降序（并列时评分高者优先，id 稳定分页） */
+    async findHot(params: {
+      page: number;
+      pageSize: number;
+      excludeTypes?: AnimeType[];
+    }) {
+      const { page, pageSize, excludeTypes } = params;
+
+      const conditions = [notInArray(animeTable.status, ['draft'])];
+      if (excludeTypes?.length) {
+        conditions.push(notInArray(animeTable.type, excludeTypes));
+      }
+      const whereClause = and(...conditions);
+
+      const [rows, countResult] = await Promise.all([
+        db
+          .select(clientColumns)
+          .from(animeTable)
+          .where(whereClause)
+          .orderBy(
+            desc(animeTable.scoreCount),
+            desc(animeTable.avgScore),
+            asc(animeTable.id)
+          )
+          .limit(pageSize)
+          .offset(calcOffset(page, pageSize)),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(animeTable)
+          .where(whereClause)
+      ]);
+
+      const items = await attachMeta(rows);
+      return { items, total: Number(countResult[0]?.count ?? 0) };
     },
 
     /** 查询番剧选项 */
