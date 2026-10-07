@@ -1,14 +1,14 @@
 import { z } from 'zod';
-import { IdSchema, PaginationQuerySchema } from './common.js';
+import { ArrayQuerySchema, IdSchema, PaginationQuerySchema } from './common.js';
 
 export const TopicListSchema = z.preprocess(
   val => val ?? {},
   z.object({
     ...PaginationQuerySchema,
     keyword: z.string().optional(),
-    status: z
-      .array(z.enum(['true', 'false']).transform(val => val === 'true'))
-      .optional(),
+    status: ArrayQuerySchema(
+      z.enum(['true', 'false']).transform(val => val === 'true')
+    ),
     sort: z.enum(['createdAt']).default('createdAt'),
     order: z.enum(['asc', 'desc']).default('desc')
   })

@@ -9,9 +9,9 @@ export const UserListSchema = z.preprocess(
     ...PaginationQuerySchema,
     keyword: z.string().max(500).optional(),
     role: ArrayQuerySchema(z.enum(UserRole)),
-    status: z
-      .array(z.enum(['true', 'false']).transform(val => val === 'true'))
-      .optional(),
+    status: ArrayQuerySchema(
+      z.enum(['true', 'false']).transform(val => val === 'true')
+    ),
     sort: z.enum(['createdAt']).default('createdAt'),
     order: z.enum(['asc', 'desc']).default('desc')
   })
