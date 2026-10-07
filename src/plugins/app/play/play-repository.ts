@@ -52,7 +52,7 @@ type AnimeItemRow = {
 const createPlayRepository = (fastify: FastifyInstance) => {
   const db = fastify.db;
 
-  /** 批量附加播放量/追番数/集数与首个视频 ID（保持原有顺序） */
+  /** 批量附加播放量/追番数/集数与首个视频 ID（保持原有顺序，单次聚合查询） */
   const attachStats = async <T extends AnimeItemRow>(
     rows: T[]
   ): Promise<
@@ -66,15 +66,15 @@ const createPlayRepository = (fastify: FastifyInstance) => {
     if (rows.length === 0) return [];
     const animeIds = rows.map(r => r.id);
 
-    const [videoRows, viewRows, collectionRows] = await Promise.all([
-      db
-        .select({ id: videosTable.id, animeId: videosTable.animeId })
-        .from(videosTable)
-        .where(inArray(videosTable.animeId, animeIds))
-        .orderBy(asc(videosTable.episode)),
+    const [videoRows, collectionRows] = await Promise.all([
+      // 每部番的集数/首个视频 ID（按集数排序）/总播放量
       db
         .select({
           animeId: videosTable.animeId,
+          videoCount: sql<number>`count(*)::int`,
+          videoId: sql<
+            string | null
+          >`(array_agg(${videosTable.id} order by ${videosTable.episode} asc))[1]`,
           playCount: sql<number>`coalesce(sum(${videosTable.views}), 0)::int`
         })
         .from(videosTable)
@@ -90,20 +90,16 @@ const createPlayRepository = (fastify: FastifyInstance) => {
         .groupBy(collectionsTable.animeId)
     ]);
 
-    const firstVideo = new Map<string, string>();
-    for (const r of videoRows) {
-      if (!firstVideo.has(r.animeId)) firstVideo.set(r.animeId, r.id);
-    }
-    const viewsByAnime = new Map(viewRows.map(r => [r.animeId, r.playCount]));
+    const statsByAnime = new Map(videoRows.map(r => [r.animeId, r]));
     const collectionsByAnime = new Map(
       collectionRows.map(r => [r.animeId, r.collectionCount])
     );
 
     return rows.map(({ seriesId, type, ...rest }) => ({
       ...rest,
-      videoCount: videoRows.filter(v => v.animeId === rest.id).length,
-      videoId: firstVideo.get(rest.id) ?? null,
-      playCount: viewsByAnime.get(rest.id) ?? 0,
+      videoCount: statsByAnime.get(rest.id)?.videoCount ?? 0,
+      videoId: statsByAnime.get(rest.id)?.videoId ?? null,
+      playCount: statsByAnime.get(rest.id)?.playCount ?? 0,
       collectionCount: collectionsByAnime.get(rest.id) ?? 0
     }));
   };
@@ -144,19 +140,16 @@ const createPlayRepository = (fastify: FastifyInstance) => {
       userId: string,
       excludeTypes: AnimeType[] | undefined
     ) {
-      const [video] = await db
-        .select()
+      // video + anime 一次 join 查出（video 不存在或番剧不存在同属无效）
+      const [row] = await db
+        .select({ video: videosTable, anime: animeTable })
         .from(videosTable)
+        .innerJoin(animeTable, eq(videosTable.animeId, animeTable.id))
         .where(eq(videosTable.id, videoId))
         .limit(1);
-      if (!video) return null;
+      if (!row) return null;
 
-      const [anime] = await db
-        .select()
-        .from(animeTable)
-        .where(eq(animeTable.id, video.animeId))
-        .limit(1);
-      if (!anime) return null;
+      const { video, anime } = row;
       if (excludeTypes?.includes(anime.type)) return null;
 
       const [
@@ -321,22 +314,30 @@ const createPlayRepository = (fastify: FastifyInstance) => {
       return created;
     },
 
-    /** 保存/更新观看进度（动漫维度唯一，换集时更新记录的 videoId） */
+    /** 保存/更新观看进度（动漫维度唯一，换集时更新记录的 videoId）
+     *
+     * 单条 INSERT...SELECT：animeId 从 videos 子查询获取，
+     * 视频不存在时 select 无行 → 不插入任何数据（静默跳过）
+     */
     async upsertHistory(
       videoId: string,
       userId: string,
       data: ClientHistoryCreate
     ) {
-      const [video] = await db
-        .select({ animeId: videosTable.animeId })
-        .from(videosTable)
-        .where(eq(videosTable.id, videoId))
-        .limit(1);
-      if (!video) return;
-
       await db
         .insert(historiesTable)
-        .values({ videoId, userId, animeId: video.animeId, time: data.time })
+        .select(sq =>
+          sq
+            .select({
+              videoId: sql<string>`${videoId}`,
+              userId: sql<string>`${userId}`,
+              animeId: videosTable.animeId,
+              time: sql<number>`${data.time}`
+            })
+            .from(videosTable)
+            .where(eq(videosTable.id, videoId))
+            .getSQL()
+        )
         .onConflictDoUpdate({
           target: [historiesTable.userId, historiesTable.animeId],
           set: { videoId, time: data.time }
@@ -345,23 +346,17 @@ const createPlayRepository = (fastify: FastifyInstance) => {
 
     /** 切换追番状态，返回切换后的状态 */
     async toggleCollection(animeId: string, userId: string) {
-      const [existing] = await db
-        .select({ id: collectionsTable.id })
-        .from(collectionsTable)
+      // 先删：已追番则删除即完成切换（一次往返）
+      const deleted = await db
+        .delete(collectionsTable)
         .where(
           and(
             eq(collectionsTable.userId, userId),
             eq(collectionsTable.animeId, animeId)
           )
         )
-        .limit(1);
-
-      if (existing) {
-        await db
-          .delete(collectionsTable)
-          .where(eq(collectionsTable.id, existing.id));
-        return false;
-      }
+        .returning({ id: collectionsTable.id });
+      if (deleted.length > 0) return false;
 
       await db.insert(collectionsTable).values({ userId, animeId });
       return true;
