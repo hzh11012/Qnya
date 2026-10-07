@@ -314,30 +314,22 @@ const createPlayRepository = (fastify: FastifyInstance) => {
       return created;
     },
 
-    /** 保存/更新观看进度（动漫维度唯一，换集时更新记录的 videoId）
-     *
-     * 单条 INSERT...SELECT：animeId 从 videos 子查询获取，
-     * 视频不存在时 select 无行 → 不插入任何数据（静默跳过）
-     */
+    /** 保存/更新观看进度（动漫维度唯一，换集时更新记录的 videoId） */
     async upsertHistory(
       videoId: string,
       userId: string,
       data: ClientHistoryCreate
     ) {
+      const [video] = await db
+        .select({ animeId: videosTable.animeId })
+        .from(videosTable)
+        .where(eq(videosTable.id, videoId))
+        .limit(1);
+      if (!video) return;
+
       await db
         .insert(historiesTable)
-        .select(sq =>
-          sq
-            .select({
-              videoId: sql<string>`${videoId}`,
-              userId: sql<string>`${userId}`,
-              animeId: videosTable.animeId,
-              time: sql<number>`${data.time}`
-            })
-            .from(videosTable)
-            .where(eq(videosTable.id, videoId))
-            .getSQL()
-        )
+        .values({ videoId, userId, animeId: video.animeId, time: data.time })
         .onConflictDoUpdate({
           target: [historiesTable.userId, historiesTable.animeId],
           set: { videoId, time: data.time }
