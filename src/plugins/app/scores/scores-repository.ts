@@ -19,6 +19,17 @@ declare module 'fastify' {
 const createScoresRepository = (fastify: FastifyInstance) => {
   const db = fastify.db;
 
+  /** 重算番剧的平均评分与评分人数（只统计已审核） */
+  const syncAnimeScore = async (animeId: string) => {
+    await db
+      .update(animeTable)
+      .set({
+        avgScore: sql`(select coalesce(avg(${scoresTable.score}), 0) from ${scoresTable} where ${scoresTable.animeId} = ${animeId} and ${scoresTable.status})`,
+        scoreCount: sql`(select count(*) from ${scoresTable} where ${scoresTable.animeId} = ${animeId} and ${scoresTable.status})`
+      })
+      .where(eq(animeTable.id, animeId));
+  };
+
   return {
     /** 查询评分列表 */
     async findAll(params: ScoreListQuery) {
@@ -99,6 +110,9 @@ const createScoresRepository = (fastify: FastifyInstance) => {
         .set(data)
         .where(eq(scoresTable.id, id))
         .returning();
+      if (updated) {
+        await syncAnimeScore(updated.animeId);
+      }
       return updated ?? null;
     },
 
@@ -108,6 +122,9 @@ const createScoresRepository = (fastify: FastifyInstance) => {
         .delete(scoresTable)
         .where(eq(scoresTable.id, id))
         .returning();
+      if (deleted) {
+        await syncAnimeScore(deleted.animeId);
+      }
       return deleted ?? null;
     }
   };

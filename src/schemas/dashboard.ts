@@ -94,6 +94,7 @@ export const DashboardStatsSchemaResponse = z.object({
       animeName: z.string(),
       score: z.number(),
       content: z.string(),
+      status: z.boolean(),
       createdAt: z.coerce.date()
     })
   ),

@@ -124,6 +124,27 @@ const createFeedbackRepository = (fastify: FastifyInstance) => {
         .where(eq(feedbackTable.id, id))
         .returning();
       return deleted ?? null;
+    },
+
+    /** 客户端 — 提交问题反馈（番剧不存在返回 null） */
+    async create(input: {
+      userId: string;
+      animeId: string;
+      type: 'consultation' | 'suggestion' | 'complaint' | 'other';
+      content: string;
+    }) {
+      const [anime] = await db
+        .select({ id: animeTable.id })
+        .from(animeTable)
+        .where(eq(animeTable.id, input.animeId))
+        .limit(1);
+      if (!anime) return null;
+
+      const [created] = await db
+        .insert(feedbackTable)
+        .values(input)
+        .returning({ id: feedbackTable.id });
+      return created ?? null;
     }
   };
 };

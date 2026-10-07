@@ -25,7 +25,12 @@ export default [
     },
     rules: {
       ...prettierPlugin.configs.recommended.rules,
-      '@typescript-eslint/no-explicit-any': 'off'
+      '@typescript-eslint/no-explicit-any': 'off',
+      // 允许 rest 解构省略字段的 omit 模式（如 { a, b, ...rest }）
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { ignoreRestSiblings: true }
+      ]
     }
   },
   prettier

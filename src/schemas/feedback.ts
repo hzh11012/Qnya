@@ -31,6 +31,23 @@ export const UpdateFeedbackBodySchema = z.object({
 
 export type UpdateFeedbackBody = z.infer<typeof UpdateFeedbackBodySchema>;
 
+/** 客户端 — 提交问题反馈 */
+export const ClientFeedbackCreateParamsSchema = z.object({
+  animeId: IdSchema
+});
+
+export const ClientFeedbackCreateBodySchema = z.object({
+  type: z.enum(['consultation', 'suggestion', 'complaint', 'other']),
+  content: z.string().min(1, '反馈内容不能为空').max(500, '反馈内容最多 500 字')
+});
+
+export type ClientFeedbackCreateParams = z.infer<
+  typeof ClientFeedbackCreateParamsSchema
+>;
+export type ClientFeedbackCreateBody = z.infer<
+  typeof ClientFeedbackCreateBodySchema
+>;
+
 export const DeleteFeedbackParamsSchema = z.object({
   id: IdSchema
 });

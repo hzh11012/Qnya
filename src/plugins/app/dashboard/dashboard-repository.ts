@@ -166,6 +166,7 @@ const createDashboardRepository = (fastify: FastifyInstance) => {
               animeName: animeTable.name,
               score: scoresTable.score,
               content: scoresTable.content,
+              status: scoresTable.status,
               createdAt: scoresTable.createdAt
             })
             .from(scoresTable)
