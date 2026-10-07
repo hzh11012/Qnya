@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PaginationQuerySchema, IdSchema } from './common.js';
+import { ArrayQuerySchema, PaginationQuerySchema, IdSchema } from './common.js';
 
 export const WebhookSchema = z.object({
   hash: z.string().min(1),
@@ -16,7 +16,7 @@ export const TaskListSchema = z.preprocess(
   z.object({
     ...PaginationQuerySchema,
     keyword: z.string().max(500).optional(),
-    status: z.array(z.enum(TaskStatus)).optional(),
+    status: ArrayQuerySchema(z.enum(TaskStatus)),
     sort: z.enum(['createdAt', 'fileSize']).default('createdAt'),
     order: z.enum(['asc', 'desc']).default('desc')
   })

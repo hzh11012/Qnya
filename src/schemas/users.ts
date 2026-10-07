@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PaginationQuerySchema, IdSchema } from './common.js';
+import { ArrayQuerySchema, PaginationQuerySchema, IdSchema } from './common.js';
 
 const UserRole = ['admin', 'premium', 'user', 'guest'] as const;
 
@@ -8,7 +8,7 @@ export const UserListSchema = z.preprocess(
   z.object({
     ...PaginationQuerySchema,
     keyword: z.string().max(500).optional(),
-    role: z.array(z.enum(UserRole)).optional(),
+    role: ArrayQuerySchema(z.enum(UserRole)),
     status: z
       .array(z.enum(['true', 'false']).transform(val => val === 'true'))
       .optional(),
