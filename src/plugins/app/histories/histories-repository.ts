@@ -6,7 +6,7 @@ import {
   videosTable,
   animeTable
 } from '../../../db/index.js';
-import { eq, sql, and, inArray, like } from 'drizzle-orm';
+import { eq, sql, inArray, like } from 'drizzle-orm';
 import type { HistoryListQuery } from '../../../schemas/histories.js';
 import { calcOffset, buildOrderBy } from '../../../utils/paginated-query.js';
 import { escapeLike } from '../../../utils/like.js';
@@ -95,21 +95,6 @@ const createHistoriesRepository = (fastify: FastifyInstance) => {
         .select()
         .from(historiesTable)
         .where(eq(historiesTable.id, id))
-        .limit(1);
-      return history ?? null;
-    },
-
-    /** 根据 userId 和 videoId 查找观看记录 */
-    async findByUserIdAndVideoId(userId: string, videoId: string) {
-      const [history] = await db
-        .select()
-        .from(historiesTable)
-        .where(
-          and(
-            eq(historiesTable.userId, userId),
-            eq(historiesTable.videoId, videoId)
-          )
-        )
         .limit(1);
       return history ?? null;
     },

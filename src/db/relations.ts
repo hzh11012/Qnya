@@ -192,6 +192,10 @@ export const historiesRelations = relations(historiesTable, ({ one }) => ({
     fields: [historiesTable.userId],
     references: [usersTable.id]
   }),
+  anime: one(animeTable, {
+    fields: [historiesTable.animeId],
+    references: [animeTable.id]
+  }),
   video: one(videosTable, {
     fields: [historiesTable.videoId],
     references: [videosTable.id]

@@ -176,21 +176,19 @@ const createPlayRepository = (fastify: FastifyInstance) => {
           .from(videosTable)
           .where(eq(videosTable.animeId, anime.id))
           .orderBy(asc(videosTable.episode)),
-        // 动漫维度唯一历史：该动漫下任一视频的最新一条观看记录
+        // 动漫维度唯一历史：该动漫下最后观看的一条记录
         db
           .select({
             videoId: historiesTable.videoId,
             time: historiesTable.time
           })
           .from(historiesTable)
-          .innerJoin(videosTable, eq(videosTable.id, historiesTable.videoId))
           .where(
             and(
               eq(historiesTable.userId, userId),
-              eq(videosTable.animeId, anime.id)
+              eq(historiesTable.animeId, anime.id)
             )
           )
-          .orderBy(desc(historiesTable.updatedAt))
           .limit(1),
         db
           .select({ id: collectionsTable.id })
@@ -323,18 +321,25 @@ const createPlayRepository = (fastify: FastifyInstance) => {
       return created;
     },
 
-    /** 保存/更新观看进度 */
+    /** 保存/更新观看进度（动漫维度唯一，换集时更新记录的 videoId） */
     async upsertHistory(
       videoId: string,
       userId: string,
       data: ClientHistoryCreate
     ) {
+      const [video] = await db
+        .select({ animeId: videosTable.animeId })
+        .from(videosTable)
+        .where(eq(videosTable.id, videoId))
+        .limit(1);
+      if (!video) return;
+
       await db
         .insert(historiesTable)
-        .values({ videoId, userId, time: data.time })
+        .values({ videoId, userId, animeId: video.animeId, time: data.time })
         .onConflictDoUpdate({
-          target: [historiesTable.userId, historiesTable.videoId],
-          set: { time: data.time }
+          target: [historiesTable.userId, historiesTable.animeId],
+          set: { videoId, time: data.time }
         });
     },
 
