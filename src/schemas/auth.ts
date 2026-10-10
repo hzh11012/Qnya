@@ -20,4 +20,12 @@ export const UserInfoSchema = z.object({
   avatar: z.string().nullable()
 });
 
+/** 更新个人资料：avatar 为压缩后的 base64 dataURL 或 null（清除头像） */
+export const UpdateProfileSchema = z.object({
+  name: z.string().min(1).max(30).optional(),
+  avatar: z.string().max(100_000).nullish()
+});
+
+export type UpdateProfileBody = z.infer<typeof UpdateProfileSchema>;
+
 export type LoginBody = z.infer<typeof LoginSchema>;

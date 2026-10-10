@@ -15,6 +15,7 @@ import {
   ClientHistoryCreate,
   ClientRatingCreate
 } from '../../../schemas/play.js';
+import { buildSeasonSuffix } from '../../../utils/season.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -369,6 +370,121 @@ const createPlayRepository = (fastify: FastifyInstance) => {
         });
 
       await syncAnimeScore(animeId);
+    },
+
+    /** 我的追番分页（附带每部番第一集 videoId，用于跳转播放） */
+    async findUserCollections(userId: string, page: number, pageSize: number) {
+      const where = eq(collectionsTable.userId, userId);
+
+      const [rows, countResult] = await Promise.all([
+        db
+          .select({
+            animeId: collectionsTable.animeId,
+            name: animeTable.name,
+            season: animeTable.season,
+            seasonName: animeTable.seasonName,
+            cover: animeTable.cover,
+            status: animeTable.status,
+            avgScore: animeTable.avgScore,
+            collectedAt: collectionsTable.createdAt
+          })
+          .from(collectionsTable)
+          .innerJoin(animeTable, eq(collectionsTable.animeId, animeTable.id))
+          .where(where)
+          .orderBy(desc(collectionsTable.createdAt))
+          .limit(pageSize)
+          .offset((page - 1) * pageSize),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(collectionsTable)
+          .where(where)
+      ]);
+
+      // 批量查每部番的剧集（episode 升序）：取第一集 videoId 用于跳转，同时得到集数
+      const videosByAnime = new Map<
+        string,
+        { firstId: string | null; count: number }
+      >();
+      if (rows.length > 0) {
+        const videoRows = await db
+          .select({ animeId: videosTable.animeId, id: videosTable.id })
+          .from(videosTable)
+          .where(
+            inArray(
+              videosTable.animeId,
+              rows.map(r => r.animeId)
+            )
+          )
+          .orderBy(asc(videosTable.animeId), asc(videosTable.episode));
+        for (const v of videoRows) {
+          const entry = videosByAnime.get(v.animeId);
+          if (entry) {
+            entry.count += 1;
+          } else {
+            videosByAnime.set(v.animeId, { firstId: v.id, count: 1 });
+          }
+        }
+      }
+
+      return {
+        items: rows.map(row => ({
+          animeId: row.animeId,
+          name: row.name + buildSeasonSuffix(row.season, row.seasonName),
+          cover: row.cover,
+          status: row.status,
+          videoCount: videosByAnime.get(row.animeId)?.count ?? 0,
+          avgScore: row.avgScore,
+          videoId: videosByAnime.get(row.animeId)?.firstId ?? null,
+          collectedAt: row.collectedAt
+        })),
+        total: Number(countResult[0]?.count ?? 0)
+      };
+    },
+
+    /** 我的历史分页（最后观看的一集 + 进度秒数） */
+    async findUserHistories(userId: string, page: number, pageSize: number) {
+      const where = eq(historiesTable.userId, userId);
+
+      const [rows, countResult] = await Promise.all([
+        db
+          .select({
+            animeId: videosTable.animeId,
+            videoId: historiesTable.videoId,
+            time: historiesTable.time,
+            episode: videosTable.episode,
+            videoTitle: videosTable.title,
+            name: animeTable.name,
+            season: animeTable.season,
+            seasonName: animeTable.seasonName,
+            banner: animeTable.banner,
+            watchedAt: historiesTable.updatedAt
+          })
+          .from(historiesTable)
+          .innerJoin(videosTable, eq(historiesTable.videoId, videosTable.id))
+          .innerJoin(animeTable, eq(videosTable.animeId, animeTable.id))
+          .where(where)
+          .orderBy(desc(historiesTable.updatedAt))
+          .limit(pageSize)
+          .offset((page - 1) * pageSize),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(historiesTable)
+          .where(where)
+      ]);
+
+      return {
+        items: rows.map(row => ({
+          animeId: row.animeId,
+          name: row.name + buildSeasonSuffix(row.season, row.seasonName),
+          banner: row.banner,
+          videoId: row.videoId,
+          episode: row.episode,
+          videoTitle: row.videoTitle,
+          time: row.time,
+          watchedAt: row.watchedAt
+        })),
+        total: Number(countResult[0]?.count ?? 0)
+      };
     }
   };
 };

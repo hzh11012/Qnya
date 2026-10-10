@@ -2,8 +2,10 @@ import { FastifyInstance } from 'fastify';
 import {
   SendCodeSchema,
   LoginSchema,
+  UpdateProfileSchema,
   type SendCodeBody,
   type LoginBody,
+  type UpdateProfileBody,
   UserInfoSchema
 } from '../../../schemas/auth.js';
 import { SuccessResponseSchema } from '../../../schemas/common.js';
@@ -131,6 +133,31 @@ export default async function (fastify: FastifyInstance) {
 
       reply.clearCookie('session', { path: '/' });
       return reply.success('登出成功');
+    }
+  );
+
+  /** 更新个人资料（名称/头像） */
+  fastify.patch<{ Body: UpdateProfileBody }>(
+    '/me',
+    {
+      preHandler: [authenticate],
+      schema: {
+        body: UpdateProfileSchema,
+        response: {
+          200: SuccessResponseSchema(UserInfoSchema)
+        }
+      }
+    },
+    async (request, reply) => {
+      const user = await usersRepository.update(
+        request.sessionData!.userId,
+        request.body
+      );
+      if (!user) {
+        throw httpErrors.notFound('用户不存在');
+      }
+
+      return reply.success('更新个人资料成功', user);
     }
   );
 }
