@@ -36,6 +36,25 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
     )`;
   };
 
+  /** 客户端番剧行类型（与 clientColumns 对齐，供原始 SQL 结果映射） */
+  interface ClientAnimeRow {
+    id: string;
+    name: string;
+    season: number;
+    seasonName: string | null;
+    description: string;
+    remark: string;
+    cover: string;
+    status: string;
+    type: string;
+    director: string;
+    cv: string;
+    year: number;
+    month: string;
+    avgScore: number;
+    scoreCount: number;
+  }
+
   /** 客户端搜索结果列 */
   const clientColumns = {
     id: animeTable.id,
@@ -402,6 +421,123 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
       ]);
 
       const items = await attachMeta(rows);
+      return { items, total: Number(countResult[0]?.count ?? 0) };
+    },
+
+    /**
+     * 猜你喜欢排序：
+     *  - 登录用户：兴趣分（标签画像分 + CF 共现分）降序 → 热门度兜底（评分人数/均分）→ md5(id||seed) 稳定随机，
+     *    同一 seed 内分页顺序稳定，兴趣分相同的热门优先，避免冷门番永远垫底；
+     *  - 游客：md5(id||seed) 纯随机洗牌（seed 分页稳定）。
+     * 互动信号权重：观看 3 / 追番 4 / 评分 2。
+     */
+    async findGuess(params: {
+      page: number;
+      pageSize: number;
+      seed?: string;
+      excludeTypes?: AnimeType[];
+      userId?: string | null;
+    }) {
+      const { page, pageSize, seed, excludeTypes, userId } = params;
+      const offset = calcOffset(page, pageSize);
+
+      // 过滤条件供 count 查询使用（行查询在原始 SQL 内内联同样的条件）
+      const conditions = [notInArray(animeTable.status, ['draft'])];
+      if (excludeTypes?.length) {
+        conditions.push(notInArray(animeTable.type, excludeTypes));
+      }
+      const whereClause = and(...conditions);
+
+      // 与客户端列对齐的原始 SQL 查询片段（enum 列转 text 便于映射）
+      const clientSelect = sql`
+        a.id AS "id",
+        a.name AS "name",
+        a.season AS "season",
+        a.season_name AS "seasonName",
+        a.description AS "description",
+        a.remark AS "remark",
+        a.cover AS "cover",
+        a.status::text AS "status",
+        a.type::text AS "type",
+        a.director AS "director",
+        a.cv AS "cv",
+        a.year AS "year",
+        a.month::text AS "month",
+        a.avg_score AS "avgScore",
+        a.score_count AS "scoreCount"
+      `;
+
+      // 成人内容过滤（enum 与参数比较需转 text；数组参数展开为 IN 列表）
+      const excludeSql = excludeTypes?.length
+        ? sql` AND a.type::text NOT IN (${sql.join(
+            excludeTypes.map(t => sql`${t}`),
+            sql`, `
+          )})`
+        : sql``;
+
+      const result = userId
+        ? await db.execute(sql`
+            WITH interactions AS (
+              SELECT anime_id, ${3}::int AS weight FROM histories WHERE user_id = ${userId}
+              UNION ALL
+              SELECT anime_id, ${4}::int FROM collections WHERE user_id = ${userId}
+              UNION ALL
+              SELECT anime_id, ${2}::int FROM scores WHERE user_id = ${userId}
+            ),
+            user_tags AS (
+              SELECT att.tag_id, sum(i.weight) AS weight
+              FROM interactions i
+              JOIN anime_to_tags att ON att.anime_id = i.anime_id
+              GROUP BY att.tag_id
+            ),
+            watched AS (
+              SELECT anime_id, max(weight) AS weight FROM interactions GROUP BY anime_id
+            ),
+            user_cf AS (
+              SELECT af.related_anime_id AS anime_id, sum(af.score * w.weight) AS score
+              FROM watched w
+              JOIN anime_affinity af ON af.anime_id = w.anime_id
+              GROUP BY af.related_anime_id
+            ),
+            candidates AS (
+              SELECT
+                a.id,
+                coalesce(sum(ut.weight), 0)::int AS tag_score,
+                coalesce(max(cf.score), 0)::int AS cf_score
+              FROM anime a
+              LEFT JOIN anime_to_tags att ON att.anime_id = a.id
+              LEFT JOIN user_tags ut ON ut.tag_id = att.tag_id
+              LEFT JOIN user_cf cf ON cf.anime_id = a.id
+              WHERE a.status::text <> 'draft' ${excludeSql}
+              GROUP BY a.id
+            )
+            SELECT ${clientSelect}, c.tag_score + c.cf_score AS interest
+            FROM anime a
+            JOIN candidates c ON c.id = a.id
+            ORDER BY
+              (c.tag_score + c.cf_score) DESC,
+              a.score_count DESC,
+              a.avg_score DESC,
+              md5(a.id::text || ${seed ?? ''})
+            LIMIT ${pageSize} OFFSET ${offset}
+          `)
+        : await db.execute(sql`
+            SELECT ${clientSelect}
+            FROM anime a
+            WHERE a.status::text <> 'draft' ${excludeSql}
+            ORDER BY md5(a.id::text || ${seed ?? ''})
+            LIMIT ${pageSize} OFFSET ${offset}
+          `);
+
+      const rows = result.rows as unknown as ClientAnimeRow[];
+
+      const items = await attachMeta(rows);
+
+      // count 沿用原查询条件（与排序无关）
+      const countResult = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(animeTable)
+        .where(whereClause);
       return { items, total: Number(countResult[0]?.count ?? 0) };
     },
 

@@ -129,3 +129,11 @@ export const ClientHotResponseSchema = z.object({
   items: z.array(SearchAnimeItemSchema),
   total: z.number()
 });
+
+/** 猜你喜欢 query：随机排序分页，seed 便同一会话内分页顺序稳定 */
+export const ClientGuessQuerySchema = z.object({
+  ...PaginationQuerySchema,
+  seed: z.string().max(64).optional()
+});
+
+export type ClientGuessQuery = z.infer<typeof ClientGuessQuerySchema>;

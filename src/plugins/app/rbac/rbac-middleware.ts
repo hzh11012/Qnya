@@ -44,6 +44,17 @@ const createRbacMiddleware = () => {
           ? undefined
           : (['adult'] as AnimeType[]);
       };
+    },
+
+    /** 可选版：未登录/无权限一律排除 adult，登录且角色允许时放行（不拦截请求） */
+    optionalFilterAdultTypes() {
+      return async (request: FastifyRequest) => {
+        request.excludeTypes =
+          request.sessionData &&
+          ADULT_ALLOWED_ROLES.includes(request.sessionData.role)
+            ? undefined
+            : (['adult'] as AnimeType[]);
+      };
     }
   };
 };

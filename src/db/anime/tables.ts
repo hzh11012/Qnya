@@ -3,6 +3,7 @@ import {
   integer,
   uuid,
   pgTable,
+  primaryKey,
   real,
   smallint,
   text,
@@ -68,5 +69,31 @@ export const animeTable = pgTable(
       table.year,
       table.month
     )
+  ]
+);
+
+/**
+ * 番剧亲和表（协同过滤共现矩阵）：
+ * 由定时任务全量重建，score = 同时与两番剧有过互动（观看/追番/评分）的用户数，
+ * 单番剧仅保留 top N 相关番，供「猜你喜欢」做 CF 加权
+ */
+export const animeAffinityTable = pgTable(
+  'anime_affinity',
+  {
+    /** 源番剧ID */
+    animeId: uuid('anime_id')
+      .notNull()
+      .references(() => animeTable.id, { onDelete: 'cascade' }),
+    /** 相关番剧ID */
+    relatedAnimeId: uuid('related_anime_id')
+      .notNull()
+      .references(() => animeTable.id, { onDelete: 'cascade' }),
+    /** 共现得分：同时与两番剧互动的用户数 */
+    score: integer().notNull(),
+    ...timestamps
+  },
+  table => [
+    primaryKey({ columns: [table.animeId, table.relatedAnimeId] }),
+    index('anime_affinity_related_idx').on(table.relatedAnimeId)
   ]
 );
