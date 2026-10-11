@@ -4546,9 +4546,19 @@
                         "avatar": {
                           "nullable": true,
                           "type": "string"
+                        },
+                        "r18": {
+                          "type": "boolean"
                         }
                       },
-                      "required": ["id", "email", "name", "role", "avatar"],
+                      "required": [
+                        "id",
+                        "email",
+                        "name",
+                        "role",
+                        "avatar",
+                        "r18"
+                      ],
                       "additionalProperties": false
                     }
                   },
@@ -4623,9 +4633,19 @@
                         "avatar": {
                           "nullable": true,
                           "type": "string"
+                        },
+                        "r18": {
+                          "type": "boolean"
                         }
                       },
-                      "required": ["id", "email", "name", "role", "avatar"],
+                      "required": [
+                        "id",
+                        "email",
+                        "name",
+                        "role",
+                        "avatar",
+                        "r18"
+                      ],
                       "additionalProperties": false
                     }
                   },
@@ -4753,9 +4773,19 @@
                         "avatar": {
                           "nullable": true,
                           "type": "string"
+                        },
+                        "r18": {
+                          "type": "boolean"
                         }
                       },
-                      "required": ["id", "email", "name", "role", "avatar"],
+                      "required": [
+                        "id",
+                        "email",
+                        "name",
+                        "role",
+                        "avatar",
+                        "r18"
+                      ],
                       "additionalProperties": false
                     }
                   },
@@ -5010,6 +5040,168 @@
                     }
                   },
                   "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/client/home/": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number",
+                      "enum": [200]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "collections": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "animeId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "videoId": {
+                                "nullable": true,
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "cover": {
+                                "nullable": true,
+                                "type": "string"
+                              },
+                              "remark": {
+                                "nullable": true,
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": ["upcoming", "airing", "completed"]
+                              },
+                              "videoCount": {
+                                "type": "number"
+                              },
+                              "episode": {
+                                "nullable": true,
+                                "type": "number"
+                              },
+                              "time": {
+                                "nullable": true,
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "animeId",
+                              "videoId",
+                              "name",
+                              "cover",
+                              "remark",
+                              "status",
+                              "videoCount",
+                              "episode",
+                              "time"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "animeTypes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "movie",
+                                  "japanese",
+                                  "american",
+                                  "chinese",
+                                  "adult"
+                                ]
+                              },
+                              "items": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "animeId": {
+                                      "type": "string",
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                    },
+                                    "videoId": {
+                                      "nullable": true,
+                                      "type": "string",
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "cover": {
+                                      "nullable": true,
+                                      "type": "string"
+                                    },
+                                    "remark": {
+                                      "nullable": true,
+                                      "type": "string"
+                                    },
+                                    "status": {
+                                      "type": "string",
+                                      "enum": [
+                                        "upcoming",
+                                        "airing",
+                                        "completed"
+                                      ]
+                                    },
+                                    "videoCount": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "animeId",
+                                    "videoId",
+                                    "name",
+                                    "cover",
+                                    "remark",
+                                    "status",
+                                    "videoCount"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": ["type", "items"],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": ["collections", "animeTypes"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["code", "message", "data"],
                   "additionalProperties": false
                 }
               }
