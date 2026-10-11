@@ -33,6 +33,7 @@ export const SearchAnimeItemSchema = z.object({
   id: IdSchema,
   name: z.string(),
   description: z.string(),
+  remark: z.string(),
   cover: z.string(),
   status: z.string(),
   type: z.string(),

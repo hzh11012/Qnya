@@ -14,6 +14,7 @@ export const MineCollectionItemSchema = z.object({
   animeId: IdSchema,
   name: z.string(),
   cover: z.string(),
+  remark: z.string(),
   status: z.enum(['upcoming', 'airing', 'completed']),
   videoCount: z.number(),
   avgScore: z.number(),

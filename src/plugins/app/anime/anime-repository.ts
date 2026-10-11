@@ -55,6 +55,7 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
     season: animeTable.season,
     seasonName: animeTable.seasonName,
     description: animeTable.description,
+    remark: animeTable.remark,
     cover: animeTable.cover,
     status: animeTable.status,
     type: animeTable.type,

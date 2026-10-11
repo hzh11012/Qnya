@@ -384,6 +384,7 @@ const createPlayRepository = (fastify: FastifyInstance) => {
             season: animeTable.season,
             seasonName: animeTable.seasonName,
             cover: animeTable.cover,
+            remark: animeTable.remark,
             status: animeTable.status,
             avgScore: animeTable.avgScore,
             collectedAt: collectionsTable.createdAt
@@ -431,6 +432,7 @@ const createPlayRepository = (fastify: FastifyInstance) => {
           animeId: row.animeId,
           name: row.name + buildSeasonSuffix(row.season, row.seasonName),
           cover: row.cover,
+          remark: row.remark,
           status: row.status,
           videoCount: videosByAnime.get(row.animeId)?.count ?? 0,
           avgScore: row.avgScore,
