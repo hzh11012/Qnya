@@ -107,6 +107,17 @@ export const DashboardStatsSchemaResponse = z.object({
     redis: z.object({
       status: z.enum(['ok', 'error']),
       latency: z.number().optional()
+    }),
+    /** Meilisearch 搜索服务（含索引同步状态） */
+    meilisearch: z.object({
+      status: z.enum(['ok', 'error']),
+      latency: z.number().optional(),
+      /** 索引文档数 */
+      documents: z.number().optional(),
+      /** 是否正在执行索引任务 */
+      indexing: z.boolean().optional(),
+      /** 索引文档数是否与库内可发布番剧数一致 */
+      inSync: z.boolean().optional()
     })
   })
 });

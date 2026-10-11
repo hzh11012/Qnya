@@ -47,6 +47,13 @@ export const SettingsInfoSchemaResponse = z.object({
   tmdb: z.object({
     imageDomain: z.string(),
     apiDomain: z.string()
+  }),
+  /** Meilisearch 搜索服务 */
+  meilisearch: z.object({
+    host: z.string(),
+    status: z.enum(['ok', 'error']),
+    documents: z.number(),
+    inSync: z.boolean()
   })
 });
 

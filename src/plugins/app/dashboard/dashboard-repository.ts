@@ -67,7 +67,8 @@ const createDashboardRepository = (fastify: FastifyInstance) => {
           recentScores,
           // 系统健康（并入并行，不额外消耗时间）
           dbLatency,
-          redisLatency
+          redisLatency,
+          meiliStatus
         ] = await Promise.all([
           // 番剧总数
           db.select({ count: sql<number>`count(*)` }).from(animeTable),
@@ -193,6 +194,27 @@ const createDashboardRepository = (fastify: FastifyInstance) => {
             } catch {
               return { status: 'error' as const, latency: undefined };
             }
+          })(),
+          // Meilisearch 健康检测（含索引文档数与同步状态）
+          (async () => {
+            const start = Date.now();
+            try {
+              const health = await fastify.meili.health();
+              if (health.status !== 'available') {
+                throw new Error(`status: ${health.status}`);
+              }
+              const stats = await fastify.meili.index('anime').getStats();
+              const dbCount = await fastify.animeRepository.countPublishable();
+              return {
+                status: 'ok' as const,
+                latency: Date.now() - start,
+                documents: stats.numberOfDocuments,
+                indexing: stats.isIndexing,
+                inSync: stats.numberOfDocuments === dbCount
+              };
+            } catch {
+              return { status: 'error' as const };
+            }
           })()
         ]);
 
@@ -264,7 +286,8 @@ const createDashboardRepository = (fastify: FastifyInstance) => {
           })),
           system: {
             database: dbLatency,
-            redis: redisLatency
+            redis: redisLatency,
+            meilisearch: meiliStatus
           }
         };
 
@@ -283,6 +306,6 @@ export default fp(
   },
   {
     name: 'dashboard-repository',
-    dependencies: ['db', 'redis']
+    dependencies: ['db', 'redis', 'meilisearch', 'anime-repository']
   }
 );

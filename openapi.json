@@ -1374,9 +1374,32 @@
                               },
                               "required": ["status"],
                               "additionalProperties": false
+                            },
+                            "meilisearch": {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "enum": ["ok", "error"]
+                                },
+                                "latency": {
+                                  "type": "number"
+                                },
+                                "documents": {
+                                  "type": "number"
+                                },
+                                "indexing": {
+                                  "type": "boolean"
+                                },
+                                "inSync": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false
                             }
                           },
-                          "required": ["database", "redis"],
+                          "required": ["database", "redis", "meilisearch"],
                           "additionalProperties": false
                         }
                       },
@@ -3003,6 +3026,26 @@
                           },
                           "required": ["imageDomain", "apiDomain"],
                           "additionalProperties": false
+                        },
+                        "meilisearch": {
+                          "type": "object",
+                          "properties": {
+                            "host": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": ["ok", "error"]
+                            },
+                            "documents": {
+                              "type": "number"
+                            },
+                            "inSync": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": ["host", "status", "documents", "inSync"],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
@@ -3013,7 +3056,8 @@
                         "session",
                         "security",
                         "resource",
-                        "tmdb"
+                        "tmdb",
+                        "meilisearch"
                       ],
                       "additionalProperties": false
                     }

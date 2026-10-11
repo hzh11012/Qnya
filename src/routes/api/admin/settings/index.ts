@@ -14,6 +14,27 @@ export default async function (fastify: FastifyInstance) {
       }
     },
     async (_request, reply) => {
+      // Meilisearch 健康与索引同步状态（异常时降级为 error，不阻塞接口）
+      const meili = await (async () => {
+        try {
+          const stats = await fastify.meili.index('anime').getStats();
+          const dbCount = await fastify.animeRepository.countPublishable();
+          return {
+            host: fastify.config.MEILI_URL,
+            status: 'ok' as const,
+            documents: stats.numberOfDocuments,
+            inSync: stats.numberOfDocuments === dbCount
+          };
+        } catch {
+          return {
+            host: fastify.config.MEILI_URL,
+            status: 'error' as const,
+            documents: 0,
+            inSync: false
+          };
+        }
+      })();
+
       return reply.success('获取系统信息成功', {
         server: {
           nodeVersion: process.version,
@@ -53,7 +74,8 @@ export default async function (fastify: FastifyInstance) {
         tmdb: {
           imageDomain: config.TMDB_IMAGE_DOMAIN,
           apiDomain: config.TMDB_API_DOMAIN
-        }
+        },
+        meilisearch: meili
       });
     }
   );
