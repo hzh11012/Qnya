@@ -238,17 +238,17 @@ const createPlayRepository = (fastify: FastifyInstance) => {
           .limit(10)
       ]);
 
-      const [animeStats] = await attachStats([
-        {
-          ...anime,
-          status: anime.status as 'upcoming' | 'airing' | 'completed'
-        }
-      ] as AnimeItemRow[]);
-
-      const series = await attachStats(seriesRows as AnimeItemRow[]);
-      const recommendations = await attachStats(
-        recommendRows as AnimeItemRow[]
-      );
+      // 三组 stats 互不依赖，并行执行（attachStats 内部各 2 个查询，共 1 轮往返）
+      const [[animeStats], series, recommendations] = await Promise.all([
+        attachStats([
+          {
+            ...anime,
+            status: anime.status as 'upcoming' | 'airing' | 'completed'
+          }
+        ] as AnimeItemRow[]),
+        attachStats(seriesRows as AnimeItemRow[]),
+        attachStats(recommendRows as AnimeItemRow[])
+      ]);
 
       return {
         animeId: anime.id,
