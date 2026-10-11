@@ -17,7 +17,6 @@ import { escapeLike } from '../../../utils/like.js';
 import { calcOffset, buildOrderBy } from '../../../utils/paginated-query.js';
 import { t2s } from '../../../utils/t2s.js';
 import { buildSeasonSuffix } from '../../../utils/season.js';
-import { toPinyin, toInitials } from '../../../utils/pinyin.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -28,23 +27,12 @@ declare module 'fastify' {
 const createAnimeRepository = (fastify: FastifyInstance) => {
   const db = fastify.db;
 
-  /** 名称/拼音/首字母联合模糊匹配条件（管理后台列表关键词过滤使用）
-   *
-   * 双路匹配支持混合关键词（如 "海z"、"hz王"）：
-   * - 归一化路：汉字转全拼/首字母后匹配拼音列
-   * - 原始路：保留原始关键词匹配名称与拼音列（纯中文/纯拉丁输入）
-   */
+  /** 名称模糊匹配条件（管理后台列表关键词过滤使用，客户端搜索走 Meilisearch） */
   const nameSearchCondition = (keyword: string) => {
     const simplified = t2s(keyword);
-    const raw = escapeLike(keyword.toLowerCase());
-    const full = escapeLike(toPinyin(simplified).toLowerCase());
-    const initials = escapeLike(toInitials(simplified).toLowerCase());
     return sql`(
       ${animeTable.name} ILIKE ${'%' + escapeLike(simplified) + '%'}
-      OR ${animeTable.namePinyin} ILIKE ${'%' + full + '%'}
-      OR ${animeTable.nameInitials} ILIKE ${'%' + initials + '%'}
-      OR ${animeTable.namePinyin} ILIKE ${'%' + raw + '%'}
-      OR ${animeTable.nameInitials} ILIKE ${'%' + raw + '%'}
+      OR ${animeTable.name} ILIKE ${'%' + escapeLike(keyword.toLowerCase()) + '%'}
     )`;
   };
 
@@ -169,11 +157,7 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
       const created = await db.transaction(async tx => {
         const [anime] = await tx
           .insert(animeTable)
-          .values({
-            ...animeData,
-            namePinyin: toPinyin(animeData.name),
-            nameInitials: toInitials(animeData.name)
-          })
+          .values(animeData)
           .returning();
 
         await tx
@@ -192,17 +176,9 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
       let updated: typeof animeTable.$inferSelect | undefined;
       await db.transaction(async tx => {
         if (Object.keys(animeData).length > 0) {
-          const updateData: typeof animeData & {
-            namePinyin?: string;
-            nameInitials?: string;
-          } = { ...animeData };
-          if (animeData.name) {
-            updateData.namePinyin = toPinyin(animeData.name);
-            updateData.nameInitials = toInitials(animeData.name);
-          }
           [updated] = await tx
             .update(animeTable)
-            .set(updateData)
+            .set(animeData)
             .where(eq(animeTable.id, id))
             .returning();
         }

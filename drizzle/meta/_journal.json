@@ -71,6 +71,13 @@
       "when": 1791729000000,
       "tag": "0009_users-r18",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791738247720,
+      "tag": "0010_anime-drop-pinyin",
+      "breakpoints": true
     }
   ]
 }

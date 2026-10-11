@@ -54,10 +54,6 @@ export const animeTable = pgTable(
     avgScore: real('avg_score').notNull().default(0),
     /** 动漫评分人数 */
     scoreCount: integer('score_count').notNull().default(0),
-    /** 名称全拼（用于拼音搜索） */
-    namePinyin: varchar('name_pinyin', { length: 300 }),
-    /** 名称首字母（用于缩写搜索） */
-    nameInitials: varchar('name_initials', { length: 100 }),
     ...timestamps
   },
   table => [
@@ -71,14 +67,6 @@ export const animeTable = pgTable(
       table.status,
       table.year,
       table.month
-    ),
-    index('anime_name_pinyin_trgm_idx').using(
-      'gin',
-      sql`${table.namePinyin} gin_trgm_ops`
-    ),
-    index('anime_name_initials_trgm_idx').using(
-      'gin',
-      sql`${table.nameInitials} gin_trgm_ops`
     )
   ]
 );
