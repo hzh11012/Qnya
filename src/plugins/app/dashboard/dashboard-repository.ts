@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
+import type { Redis } from 'ioredis';
 import { desc, eq, sql } from 'drizzle-orm';
 import {
   animeTable,
@@ -24,6 +25,11 @@ declare module 'fastify' {
 const CACHE_KEY = 'dashboard:stats';
 /** 缓存 TTL：30 秒 */
 const CACHE_TTL = 30;
+
+/** 供其他仓库在数据变更后失效仪表盘缓存 */
+export const invalidateDashboardCache = async (redis: Redis) => {
+  await redis.del(CACHE_KEY);
+};
 
 const createDashboardRepository = (fastify: FastifyInstance) => {
   const db = fastify.db;

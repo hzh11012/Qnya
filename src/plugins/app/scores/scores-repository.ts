@@ -9,6 +9,7 @@ import type {
 import { calcOffset, buildOrderBy } from '../../../utils/paginated-query.js';
 import { escapeLike } from '../../../utils/like.js';
 import { t2s } from '../../../utils/t2s.js';
+import { invalidateDashboardCache } from '../dashboard/dashboard-repository.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -112,6 +113,8 @@ const createScoresRepository = (fastify: FastifyInstance) => {
         .returning();
       if (updated) {
         await syncAnimeScore(updated.animeId);
+        // 审核状态变更后立即失效概览统计缓存，避免“待审核”陈旧显示
+        await invalidateDashboardCache(fastify.redis);
       }
       return updated ?? null;
     },
@@ -124,6 +127,7 @@ const createScoresRepository = (fastify: FastifyInstance) => {
         .returning();
       if (deleted) {
         await syncAnimeScore(deleted.animeId);
+        await invalidateDashboardCache(fastify.redis);
       }
       return deleted ?? null;
     }

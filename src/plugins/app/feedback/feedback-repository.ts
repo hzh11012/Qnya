@@ -10,6 +10,7 @@ import { calcOffset, buildOrderBy } from '../../../utils/paginated-query.js';
 import { escapeLike } from '../../../utils/like.js';
 import { t2s } from '../../../utils/t2s.js';
 import { buildSeasonSuffix } from '../../../utils/season.js';
+import { invalidateDashboardCache } from '../dashboard/dashboard-repository.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -114,6 +115,8 @@ const createFeedbackRepository = (fastify: FastifyInstance) => {
         .set(data)
         .where(eq(feedbackTable.id, id))
         .returning();
+      // 处理状态变更后立即失效概览统计缓存，避免“待处理”陈旧显示
+      if (updated) await invalidateDashboardCache(fastify.redis);
       return updated ?? null;
     },
 
@@ -123,6 +126,7 @@ const createFeedbackRepository = (fastify: FastifyInstance) => {
         .delete(feedbackTable)
         .where(eq(feedbackTable.id, id))
         .returning();
+      if (deleted) await invalidateDashboardCache(fastify.redis);
       return deleted ?? null;
     },
 
