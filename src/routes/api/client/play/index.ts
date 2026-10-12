@@ -25,7 +25,7 @@ const withSeasonSuffix = <
 });
 
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, rbac, playRepository } = fastify;
+  const { authenticate, rbac, playRepository, interactionRepository } = fastify;
 
   /** 播放详情（需登录；adult 内容仅高级会员/管理员可见，普通用户访问 18 内容得到 404） */
   fastify.get<{ Params: ClientPlayParams }>(
@@ -90,7 +90,9 @@ export default async function (fastify: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      const items = await playRepository.findDanmakus(request.params.videoId);
+      const items = await interactionRepository.findDanmakus(
+        request.params.videoId
+      );
       return reply.success('获取弹幕列表成功', { items });
     }
   );
@@ -107,7 +109,7 @@ export default async function (fastify: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      await playRepository.createDanmaku(
+      await interactionRepository.createDanmaku(
         request.params.videoId,
         request.sessionData!.userId,
         request.body
@@ -128,7 +130,7 @@ export default async function (fastify: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      await playRepository.upsertHistory(
+      await interactionRepository.upsertHistory(
         request.params.videoId,
         request.sessionData!.userId,
         request.body
@@ -155,7 +157,7 @@ export default async function (fastify: FastifyInstance) {
       );
       if (!video) return reply.notFound('视频不存在');
 
-      const collected = await playRepository.toggleCollection(
+      const collected = await interactionRepository.toggleCollection(
         video.animeId,
         request.sessionData!.userId
       );
@@ -182,7 +184,7 @@ export default async function (fastify: FastifyInstance) {
       );
       if (!video) return reply.notFound('视频不存在');
 
-      await playRepository.createRating(
+      await interactionRepository.createRating(
         video.animeId,
         request.sessionData!.userId,
         request.body

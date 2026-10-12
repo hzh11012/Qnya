@@ -4,18 +4,11 @@ import { and, asc, desc, eq, inArray, ne, notInArray, sql } from 'drizzle-orm';
 import {
   animeTable,
   collectionsTable,
-  danmakuTable,
   historiesTable,
   scoresTable,
   videosTable,
   type AnimeType
 } from '../../../db/index.js';
-import {
-  ClientDanmakuCreate,
-  ClientHistoryCreate,
-  ClientRatingCreate
-} from '../../../schemas/play.js';
-import { buildSeasonSuffix } from '../../../utils/season.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -52,6 +45,7 @@ type AnimeItemRow = {
 
 const createPlayRepository = (fastify: FastifyInstance) => {
   const db = fastify.db;
+  const { batchStats } = fastify.videosRepository;
 
   /** 批量附加播放量/追番数/集数与首个视频 ID（保持原有顺序，单次聚合查询） */
   const attachStats = async <T extends AnimeItemRow>(
@@ -67,20 +61,8 @@ const createPlayRepository = (fastify: FastifyInstance) => {
     if (rows.length === 0) return [];
     const animeIds = rows.map(r => r.id);
 
-    const [videoRows, collectionRows] = await Promise.all([
-      // 每部番的集数/首个视频 ID（按集数排序）/总播放量
-      db
-        .select({
-          animeId: videosTable.animeId,
-          videoCount: sql<number>`count(*)::int`,
-          videoId: sql<
-            string | null
-          >`(array_agg(${videosTable.id} order by ${videosTable.episode} asc))[1]`,
-          playCount: sql<number>`coalesce(sum(${videosTable.views}), 0)::int`
-        })
-        .from(videosTable)
-        .where(inArray(videosTable.animeId, animeIds))
-        .groupBy(videosTable.animeId),
+    const [videoStats, collectionRows] = await Promise.all([
+      batchStats(animeIds),
       db
         .select({
           animeId: collectionsTable.animeId,
@@ -91,29 +73,17 @@ const createPlayRepository = (fastify: FastifyInstance) => {
         .groupBy(collectionsTable.animeId)
     ]);
 
-    const statsByAnime = new Map(videoRows.map(r => [r.animeId, r]));
     const collectionsByAnime = new Map(
       collectionRows.map(r => [r.animeId, r.collectionCount])
     );
 
     return rows.map(({ seriesId, type, ...rest }) => ({
       ...rest,
-      videoCount: statsByAnime.get(rest.id)?.videoCount ?? 0,
-      videoId: statsByAnime.get(rest.id)?.videoId ?? null,
-      playCount: statsByAnime.get(rest.id)?.playCount ?? 0,
+      videoCount: videoStats.get(rest.id)?.count ?? 0,
+      videoId: videoStats.get(rest.id)?.firstId ?? null,
+      playCount: videoStats.get(rest.id)?.playCount ?? 0,
       collectionCount: collectionsByAnime.get(rest.id) ?? 0
     }));
-  };
-
-  /** 重建番剧的平均评分与评分人数（只统计已审核，评分提交后调用） */
-  const syncAnimeScore = async (animeId: string) => {
-    await db
-      .update(animeTable)
-      .set({
-        avgScore: sql`(select coalesce(avg(${scoresTable.score}), 0) from ${scoresTable} where ${scoresTable.animeId} = ${animeId} and ${scoresTable.status})`,
-        scoreCount: sql`(select count(*) from ${scoresTable} where ${scoresTable.animeId} = ${animeId} and ${scoresTable.status})`
-      })
-      .where(eq(animeTable.id, animeId));
   };
 
   return {
@@ -286,207 +256,6 @@ const createPlayRepository = (fastify: FastifyInstance) => {
         .update(videosTable)
         .set({ views: sql`${videosTable.views} + 1` })
         .where(eq(videosTable.id, videoId));
-    },
-
-    /** 弹幕列表（按出现时间排序） */
-    async findDanmakus(videoId: string) {
-      return db
-        .select({
-          text: danmakuTable.text,
-          color: danmakuTable.color,
-          mode: danmakuTable.mode,
-          time: danmakuTable.time
-        })
-        .from(danmakuTable)
-        .where(eq(danmakuTable.videoId, videoId))
-        .orderBy(asc(danmakuTable.time));
-    },
-
-    /** 发送弹幕 */
-    async createDanmaku(
-      videoId: string,
-      userId: string,
-      data: ClientDanmakuCreate
-    ) {
-      const [created] = await db
-        .insert(danmakuTable)
-        .values({ videoId, userId, ...data })
-        .returning();
-      return created;
-    },
-
-    /** 保存/更新观看进度（动漫维度唯一，换集时更新记录的 videoId） */
-    async upsertHistory(
-      videoId: string,
-      userId: string,
-      data: ClientHistoryCreate
-    ) {
-      const [video] = await db
-        .select({ animeId: videosTable.animeId })
-        .from(videosTable)
-        .where(eq(videosTable.id, videoId))
-        .limit(1);
-      if (!video) return;
-
-      await db
-        .insert(historiesTable)
-        .values({ videoId, userId, animeId: video.animeId, time: data.time })
-        .onConflictDoUpdate({
-          target: [historiesTable.userId, historiesTable.animeId],
-          set: { videoId, time: data.time }
-        });
-    },
-
-    /** 切换追番状态，返回切换后的状态 */
-    async toggleCollection(animeId: string, userId: string) {
-      // 先删：已追番则删除即完成切换（一次往返）
-      const deleted = await db
-        .delete(collectionsTable)
-        .where(
-          and(
-            eq(collectionsTable.userId, userId),
-            eq(collectionsTable.animeId, animeId)
-          )
-        )
-        .returning({ id: collectionsTable.id });
-      if (deleted.length > 0) return false;
-
-      await db.insert(collectionsTable).values({ userId, animeId });
-      return true;
-    },
-
-    /** 提交评分（未评过分则新建，否则更新），并同步番剧评分统计 */
-    async createRating(
-      animeId: string,
-      userId: string,
-      data: ClientRatingCreate
-    ) {
-      await db
-        .insert(scoresTable)
-        .values({ animeId, userId, score: data.score, content: data.content })
-        .onConflictDoUpdate({
-          target: [scoresTable.userId, scoresTable.animeId],
-          set: { score: data.score, content: data.content }
-        });
-
-      await syncAnimeScore(animeId);
-    },
-
-    /** 我的追番分页（附带每部番第一集 videoId，用于跳转播放） */
-    async findUserCollections(userId: string, page: number, pageSize: number) {
-      const where = eq(collectionsTable.userId, userId);
-
-      const [rows, countResult] = await Promise.all([
-        db
-          .select({
-            animeId: collectionsTable.animeId,
-            name: animeTable.name,
-            season: animeTable.season,
-            seasonName: animeTable.seasonName,
-            cover: animeTable.cover,
-            remark: animeTable.remark,
-            status: animeTable.status,
-            avgScore: animeTable.avgScore,
-            collectedAt: collectionsTable.createdAt
-          })
-          .from(collectionsTable)
-          .innerJoin(animeTable, eq(collectionsTable.animeId, animeTable.id))
-          .where(where)
-          .orderBy(desc(collectionsTable.createdAt))
-          .limit(pageSize)
-          .offset((page - 1) * pageSize),
-        db
-          .select({ count: sql<number>`count(*)` })
-          .from(collectionsTable)
-          .where(where)
-      ]);
-
-      // 批量查每部番的剧集（episode 升序）：取第一集 videoId 用于跳转，同时得到集数
-      const videosByAnime = new Map<
-        string,
-        { firstId: string | null; count: number }
-      >();
-      if (rows.length > 0) {
-        const videoRows = await db
-          .select({ animeId: videosTable.animeId, id: videosTable.id })
-          .from(videosTable)
-          .where(
-            inArray(
-              videosTable.animeId,
-              rows.map(r => r.animeId)
-            )
-          )
-          .orderBy(asc(videosTable.animeId), asc(videosTable.episode));
-        for (const v of videoRows) {
-          const entry = videosByAnime.get(v.animeId);
-          if (entry) {
-            entry.count += 1;
-          } else {
-            videosByAnime.set(v.animeId, { firstId: v.id, count: 1 });
-          }
-        }
-      }
-
-      return {
-        items: rows.map(row => ({
-          animeId: row.animeId,
-          name: row.name + buildSeasonSuffix(row.season, row.seasonName),
-          cover: row.cover,
-          remark: row.remark,
-          status: row.status,
-          videoCount: videosByAnime.get(row.animeId)?.count ?? 0,
-          avgScore: row.avgScore,
-          videoId: videosByAnime.get(row.animeId)?.firstId ?? null,
-          collectedAt: row.collectedAt
-        })),
-        total: Number(countResult[0]?.count ?? 0)
-      };
-    },
-
-    /** 我的历史分页（最后观看的一集 + 进度秒数） */
-    async findUserHistories(userId: string, page: number, pageSize: number) {
-      const where = eq(historiesTable.userId, userId);
-
-      const [rows, countResult] = await Promise.all([
-        db
-          .select({
-            animeId: videosTable.animeId,
-            videoId: historiesTable.videoId,
-            time: historiesTable.time,
-            episode: videosTable.episode,
-            videoTitle: videosTable.title,
-            name: animeTable.name,
-            season: animeTable.season,
-            seasonName: animeTable.seasonName,
-            banner: animeTable.banner,
-            watchedAt: historiesTable.updatedAt
-          })
-          .from(historiesTable)
-          .innerJoin(videosTable, eq(historiesTable.videoId, videosTable.id))
-          .innerJoin(animeTable, eq(videosTable.animeId, animeTable.id))
-          .where(where)
-          .orderBy(desc(historiesTable.updatedAt))
-          .limit(pageSize)
-          .offset((page - 1) * pageSize),
-        db
-          .select({ count: sql<number>`count(*)` })
-          .from(historiesTable)
-          .where(where)
-      ]);
-
-      return {
-        items: rows.map(row => ({
-          animeId: row.animeId,
-          name: row.name + buildSeasonSuffix(row.season, row.seasonName),
-          banner: row.banner,
-          videoId: row.videoId,
-          episode: row.episode,
-          videoTitle: row.videoTitle,
-          time: row.time,
-          watchedAt: row.watchedAt
-        })),
-        total: Number(countResult[0]?.count ?? 0)
-      };
     }
   };
 };
@@ -497,6 +266,6 @@ export default fp(
   },
   {
     name: 'play-repository',
-    dependencies: ['db']
+    dependencies: ['db', 'videos-repository']
   }
 );

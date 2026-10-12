@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
-import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, ne, sql } from 'drizzle-orm';
 import {
   animeTable,
   collectionsTable,
@@ -23,27 +23,7 @@ const COLLECTION_LIMIT = 5;
 
 const createHomeRepository = (fastify: FastifyInstance) => {
   const db = fastify.db;
-
-  /** 批量统计番剧集数 + 第一集 id（episode 升序） */
-  async function findVideoStats(animeIds: string[]) {
-    const map = new Map<string, { count: number; firstId: string | null }>();
-    if (animeIds.length === 0) return map;
-
-    const videoRows = await db
-      .select({ animeId: videosTable.animeId, id: videosTable.id })
-      .from(videosTable)
-      .where(inArray(videosTable.animeId, animeIds))
-      .orderBy(asc(videosTable.animeId), asc(videosTable.episode));
-    for (const v of videoRows) {
-      const entry = map.get(v.animeId);
-      if (entry) {
-        entry.count += 1;
-      } else {
-        map.set(v.animeId, { count: 1, firstId: v.id });
-      }
-    }
-    return map;
-  }
+  const { batchStats } = fastify.videosRepository;
 
   return {
     /** 我的追番（最新收藏的前 COLLECTION_LIMIT 部，带观看进度） */
@@ -81,7 +61,7 @@ const createHomeRepository = (fastify: FastifyInstance) => {
         .orderBy(desc(collectionsTable.createdAt))
         .limit(COLLECTION_LIMIT);
 
-      const videoStats = await findVideoStats(rows.map(r => r.animeId));
+      const videoStats = await batchStats(rows.map(r => r.animeId));
 
       return rows.map(row => {
         const stats = videoStats.get(row.animeId);
@@ -130,7 +110,7 @@ const createHomeRepository = (fastify: FastifyInstance) => {
         )
       );
 
-      const videoStats = await findVideoStats(
+      const videoStats = await batchStats(
         rowsByType.flat().map(r => r.animeId)
       );
 
@@ -161,6 +141,6 @@ export default fp(
   },
   {
     name: 'home-repository',
-    dependencies: ['db']
+    dependencies: ['db', 'videos-repository']
   }
 );

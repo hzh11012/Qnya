@@ -402,42 +402,6 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
       return new Map(rows.map(r => [r.id, r]));
     },
 
-    /** 热门列表：非草稿，按评分人数降序（并列时评分高者优先，id 稳定分页） */
-    async findHot(params: {
-      page: number;
-      pageSize: number;
-      excludeTypes?: AnimeType[];
-    }) {
-      const { page, pageSize, excludeTypes } = params;
-
-      const conditions = [notInArray(animeTable.status, ['draft'])];
-      if (excludeTypes?.length) {
-        conditions.push(notInArray(animeTable.type, excludeTypes));
-      }
-      const whereClause = and(...conditions);
-
-      const [rows, countResult] = await Promise.all([
-        db
-          .select(clientColumns)
-          .from(animeTable)
-          .where(whereClause)
-          .orderBy(
-            desc(animeTable.scoreCount),
-            desc(animeTable.avgScore),
-            asc(animeTable.id)
-          )
-          .limit(pageSize)
-          .offset(calcOffset(page, pageSize)),
-        db
-          .select({ count: sql<number>`count(*)` })
-          .from(animeTable)
-          .where(whereClause)
-      ]);
-
-      const items = await attachMeta(rows);
-      return { items, total: Number(countResult[0]?.count ?? 0) };
-    },
-
     /**
      * 客户端筛选列表：各维度单选 + 四种排序
      *  - score: 综合排序（评分人数 → 均分），与热门一致
@@ -547,35 +511,24 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
       const { page, pageSize, seed, excludeTypes, userId } = params;
       const offset = calcOffset(page, pageSize);
 
-      // 过滤条件供 count 查询使用（行查询在原始 SQL 内内联同样的条件）
+      // 过滤条件：count 与行查询共用同一组 drizzle 条件/列（单一来源）
       const conditions = [notInArray(animeTable.status, ['draft'])];
       if (excludeTypes?.length) {
         conditions.push(notInArray(animeTable.type, excludeTypes));
       }
       const whereClause = and(...conditions);
 
-      // 与客户端列对齐的原始 SQL 查询片段（enum 列转 text 便于映射）
-      const clientSelect = sql`
-        a.id AS "id",
-        a.name AS "name",
-        a.season AS "season",
-        a.season_name AS "seasonName",
-        a.description AS "description",
-        a.remark AS "remark",
-        a.cover AS "cover",
-        a.status::text AS "status",
-        a.type::text AS "type",
-        a.director AS "director",
-        a.cv AS "cv",
-        a.year AS "year",
-        a.month::text AS "month",
-        a.avg_score AS "avgScore",
-        a.score_count AS "scoreCount"
-      `;
+      // 客户端列的 SQL 片段：由 clientColumns 派生（单一来源），主查询直接用表名限定
+      const clientSelect = sql.join(
+        Object.entries(clientColumns).map(
+          ([key, col]) => sql`${col} AS ${sql.identifier(key)}`
+        ),
+        sql`, `
+      );
 
-      // 成人内容过滤（enum 与参数比较需转 text；数组参数展开为 IN 列表）
+      // 成人内容过滤（列对象直接嵌入，主查询不带表别名）
       const excludeSql = excludeTypes?.length
-        ? sql` AND a.type::text NOT IN (${sql.join(
+        ? sql` AND ${animeTable.type} NOT IN (${sql.join(
             excludeTypes.map(t => sql`${t}`),
             sql`, `
           )})`
@@ -607,31 +560,31 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
             ),
             candidates AS (
               SELECT
-                a.id,
+                ${animeTable.id},
                 coalesce(sum(ut.weight), 0)::int AS tag_score,
                 coalesce(max(cf.score), 0)::int AS cf_score
-              FROM anime a
-              LEFT JOIN anime_to_tags att ON att.anime_id = a.id
+              FROM ${animeTable}
+              LEFT JOIN anime_to_tags att ON att.anime_id = ${animeTable.id}
               LEFT JOIN user_tags ut ON ut.tag_id = att.tag_id
-              LEFT JOIN user_cf cf ON cf.anime_id = a.id
-              WHERE a.status::text <> 'draft' ${excludeSql}
-              GROUP BY a.id
+              LEFT JOIN user_cf cf ON cf.anime_id = ${animeTable.id}
+              WHERE ${animeTable.status} <> 'draft' ${excludeSql}
+              GROUP BY ${animeTable.id}
             )
             SELECT ${clientSelect}, c.tag_score + c.cf_score AS interest
-            FROM anime a
-            JOIN candidates c ON c.id = a.id
+            FROM ${animeTable}
+            JOIN candidates c ON c.id = ${animeTable.id}
             ORDER BY
               (c.tag_score + c.cf_score) DESC,
-              a.score_count DESC,
-              a.avg_score DESC,
-              md5(a.id::text || ${seed ?? ''})
+              ${animeTable.scoreCount} DESC,
+              ${animeTable.avgScore} DESC,
+              md5(${animeTable.id}::text || ${seed ?? ''})
             LIMIT ${pageSize} OFFSET ${offset}
           `)
         : await db.execute(sql`
             SELECT ${clientSelect}
-            FROM anime a
-            WHERE a.status::text <> 'draft' ${excludeSql}
-            ORDER BY md5(a.id::text || ${seed ?? ''})
+            FROM ${animeTable}
+            WHERE ${animeTable.status} <> 'draft' ${excludeSql}
+            ORDER BY md5(${animeTable.id}::text || ${seed ?? ''})
             LIMIT ${pageSize} OFFSET ${offset}
           `);
 

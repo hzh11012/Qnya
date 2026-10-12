@@ -9,7 +9,7 @@ import {
 } from '../../../../schemas/mine.js';
 
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, rbac, playRepository } = fastify;
+  const { authenticate, rbac, interactionRepository } = fastify;
 
   /** 我的追番 */
   fastify.get<{ Querystring: MineListQuery }>(
@@ -30,7 +30,7 @@ export default async function (fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const { page, pageSize } = request.query;
-      const result = await playRepository.findUserCollections(
+      const result = await interactionRepository.findUserCollections(
         request.sessionData!.userId,
         page,
         pageSize
@@ -58,7 +58,7 @@ export default async function (fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const { page, pageSize } = request.query;
-      const result = await playRepository.findUserHistories(
+      const result = await interactionRepository.findUserHistories(
         request.sessionData!.userId,
         page,
         pageSize

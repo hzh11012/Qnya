@@ -117,14 +117,13 @@ export const AnimeListSchemaResponse = z.object({
   total: z.number()
 });
 
-/** 热门列表 query：按评分人数排序 */
-export const ClientHotQuerySchema = z.object({
-  ...PaginationQuerySchema
+/** 客户端列表响应：条目结构与搜索结果一致（无高亮字段） */
+export const ClientListResponseSchema = z.object({
+  items: z.array(SearchAnimeItemSchema),
+  total: z.number()
 });
 
-export type ClientHotQuery = z.infer<typeof ClientHotQuerySchema>;
-
-/** 番剧筛选列表 query：各维度单选（URL 参数友好），tag 为标签 ID */
+/** 猜你喜欢 query：随机排序分页，seed 便同一会话内分页顺序稳定 */
 /** 年份半开区间参数格式：[from,to)，更早为 [,to) */
 export const YEAR_RANGE_RE = /^\[(\d{4})?,(\d{4})?\)$/;
 
@@ -197,11 +196,6 @@ export const ClientListQuerySchema = z.object({
 });
 
 export type ClientListQuery = z.infer<typeof ClientListQuerySchema>;
-/** 热门列表响应：条目结构与搜索结果一致（无高亮字段） */
-export const ClientHotResponseSchema = z.object({
-  items: z.array(SearchAnimeItemSchema),
-  total: z.number()
-});
 
 /** 猜你喜欢 query：随机排序分页，seed 便同一会话内分页顺序稳定 */
 export const ClientGuessQuerySchema = z.object({

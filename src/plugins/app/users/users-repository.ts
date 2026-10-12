@@ -43,18 +43,6 @@ const createUsersRepository = (fastify: FastifyInstance) => {
       return `用户${randomInt(100000, 1000000).toString()}`;
     },
 
-    /** 创建用户 */
-    async create(data: { email: string; name?: string }) {
-      const [user] = await db
-        .insert(usersTable)
-        .values({
-          email: data.email,
-          name: data.name ?? this.generateDefaultName()
-        })
-        .returning();
-      return user;
-    },
-
     /** 获取用户列表（分页） */
     async findAll(params: UserListQuery) {
       const { page, pageSize, keyword, role, status, sort, order } = params;

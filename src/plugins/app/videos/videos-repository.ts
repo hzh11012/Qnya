@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 import { videosTable, animeTable } from '../../../db/index.js';
-import { and, eq, like, sql } from 'drizzle-orm';
+import { and, eq, inArray, like, sql } from 'drizzle-orm';
 import type {
   VideoListQuery,
   AddVideoBody,
@@ -22,6 +22,39 @@ const createVideosRepository = (fastify: FastifyInstance) => {
   const db = fastify.db;
 
   return {
+    /**
+     * 按番剧批量统计视频：集数 / 首集 id（episode 升序）/ 总播放量。
+     * 客户端各列表的唯一视频统计来源，避免各仓各查一遍 videos 表
+     */
+    async batchStats(animeIds: string[]) {
+      const map = new Map<
+        string,
+        { count: number; firstId: string | null; playCount: number }
+      >();
+      if (animeIds.length === 0) return map;
+
+      const rows = await db
+        .select({
+          animeId: videosTable.animeId,
+          count: sql<number>`count(*)::int`,
+          firstId: sql<
+            string | null
+          >`(array_agg(${videosTable.id} order by ${videosTable.episode} asc))[1]`,
+          playCount: sql<number>`coalesce(sum(${videosTable.views}), 0)::int`
+        })
+        .from(videosTable)
+        .where(inArray(videosTable.animeId, animeIds))
+        .groupBy(videosTable.animeId);
+      for (const r of rows) {
+        map.set(r.animeId, {
+          count: Number(r.count),
+          firstId: r.firstId,
+          playCount: Number(r.playCount)
+        });
+      }
+      return map;
+    },
+
     /** 查询视频列表 */
     async findAll(params: VideoListQuery) {
       const { page, pageSize, sort, order, keyword } = params;

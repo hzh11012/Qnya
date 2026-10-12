@@ -34,12 +34,8 @@ const createRecommendRepository = (fastify: FastifyInstance) => {
   return {
     /** 推荐系统状态：最近重建时间 + 亲和记录数 + 可推荐番剧数 */
     async getStatus() {
-      const [last, affinity, anime] = await Promise.all([
-        db
-          .select({
-            last: sql<Date | null>`max(${animeAffinityTable.updatedAt})`
-          })
-          .from(animeAffinityTable),
+      const [lastRefreshedAt, affinity, anime] = await Promise.all([
+        this.getLastRefreshedAt(),
         db.select({ count: sql<number>`count(*)` }).from(animeAffinityTable),
         db
           .select({ count: sql<number>`count(*)` })
@@ -47,7 +43,7 @@ const createRecommendRepository = (fastify: FastifyInstance) => {
           .where(notInArray(animeTable.status, ['draft']))
       ]);
       return {
-        lastRefreshedAt: toDbDate(last[0]?.last),
+        lastRefreshedAt,
         affinityCount: Number(affinity[0]?.count ?? 0),
         animeCount: Number(anime[0]?.count ?? 0)
       };
