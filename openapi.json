@@ -4666,19 +4666,9 @@
                         "avatar": {
                           "nullable": true,
                           "type": "string"
-                        },
-                        "r18": {
-                          "type": "boolean"
                         }
                       },
-                      "required": [
-                        "id",
-                        "email",
-                        "name",
-                        "role",
-                        "avatar",
-                        "r18"
-                      ],
+                      "required": ["id", "email", "name", "role", "avatar"],
                       "additionalProperties": false
                     }
                   },
@@ -4753,19 +4743,9 @@
                         "avatar": {
                           "nullable": true,
                           "type": "string"
-                        },
-                        "r18": {
-                          "type": "boolean"
                         }
                       },
-                      "required": [
-                        "id",
-                        "email",
-                        "name",
-                        "role",
-                        "avatar",
-                        "r18"
-                      ],
+                      "required": ["id", "email", "name", "role", "avatar"],
                       "additionalProperties": false
                     }
                   },
@@ -4893,19 +4873,9 @@
                         "avatar": {
                           "nullable": true,
                           "type": "string"
-                        },
-                        "r18": {
-                          "type": "boolean"
                         }
                       },
-                      "required": [
-                        "id",
-                        "email",
-                        "name",
-                        "role",
-                        "avatar",
-                        "r18"
-                      ],
+                      "required": ["id", "email", "name", "role", "avatar"],
                       "additionalProperties": false
                     }
                   },

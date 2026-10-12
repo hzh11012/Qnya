@@ -97,7 +97,8 @@ const schema = {
     MEILI_MASTER_KEY: { type: 'string', default: '' },
     // Session
     SESSION_DOMAIN: { type: 'string' },
-    SESSION_SECRET: { type: 'string' },
+    // 会话签名密钥：过短的密钥可被暴力伪造 cookie 签名，启动时直接拒绝
+    SESSION_SECRET: { type: 'string', minLength: 32 },
     SESSION_MAX_AGE: { type: 'number', default: 604800000 },
     SESSION_RENEW_THRESHOLD: { type: 'number', default: 86400000 },
     // Security

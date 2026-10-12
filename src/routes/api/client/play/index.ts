@@ -13,7 +13,6 @@ import {
   type ClientRatingCreate
 } from '../../../../schemas/play.js';
 import { buildSeasonSuffix } from '../../../../utils/season.js';
-import type { AnimeType } from '../../../../db/index.js';
 
 /** 展示文案 = 名称 + 季后缀（与搜索/专题/热门一致） */
 const withSeasonSuffix = <
@@ -26,30 +25,27 @@ const withSeasonSuffix = <
 });
 
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, playRepository } = fastify;
+  const { authenticate, rbac, playRepository } = fastify;
 
-  /** 播放详情 */
+  /** 播放详情（需登录；adult 内容仅高级会员/管理员可见，普通用户访问 18 内容得到 404） */
   fastify.get<{ Params: ClientPlayParams }>(
     '/:videoId',
     {
-      preHandler: [authenticate],
+      preHandler: [
+        authenticate,
+        rbac.requireRoleAtLeast('user'),
+        rbac.filterAdultTypes()
+      ],
       schema: {
         params: z.object({ videoId: IdSchema }),
         response: { 200: SuccessResponseSchema(ClientPlayDetailSchema) }
       }
     },
     async (request, reply) => {
-      const isPrivileged = ['admin', 'premium'].includes(
-        request.sessionData!.role
-      );
-      const excludeTypes = isPrivileged
-        ? undefined
-        : (['adult'] as AnimeType[]);
-
       const detail = await playRepository.findDetail(
         request.params.videoId,
         request.sessionData!.userId,
-        excludeTypes
+        request.excludeTypes
       );
 
       if (!detail) return reply.notFound('视频不存在');
@@ -67,7 +63,7 @@ export default async function (fastify: FastifyInstance) {
   fastify.post<{ Params: ClientPlayParams }>(
     '/:videoId/views',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, rbac.requireRoleAtLeast('user')],
       schema: {
         params: z.object({ videoId: IdSchema }),
         response: { 200: SuccessResponseSchema() }
@@ -83,7 +79,7 @@ export default async function (fastify: FastifyInstance) {
   fastify.get<{ Params: ClientPlayParams }>(
     '/:videoId/danmakus',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, rbac.requireRoleAtLeast('user')],
       schema: {
         params: z.object({ videoId: IdSchema }),
         response: {
@@ -103,7 +99,7 @@ export default async function (fastify: FastifyInstance) {
   fastify.post<{ Params: ClientPlayParams; Body: ClientDanmakuCreate }>(
     '/:videoId/danmakus',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, rbac.requireRoleAtLeast('user')],
       schema: {
         params: z.object({ videoId: IdSchema }),
         body: ClientDanmakuCreateSchema,
@@ -124,7 +120,7 @@ export default async function (fastify: FastifyInstance) {
   fastify.post<{ Params: ClientPlayParams; Body: ClientHistoryCreate }>(
     '/:videoId/history',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, rbac.requireRoleAtLeast('user')],
       schema: {
         params: z.object({ videoId: IdSchema }),
         body: ClientHistoryCreateSchema,
@@ -145,7 +141,7 @@ export default async function (fastify: FastifyInstance) {
   fastify.post<{ Params: ClientPlayParams }>(
     '/:videoId/collection',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, rbac.requireRoleAtLeast('user')],
       schema: {
         params: z.object({ videoId: IdSchema }),
         response: {
@@ -173,7 +169,7 @@ export default async function (fastify: FastifyInstance) {
   fastify.post<{ Params: ClientPlayParams; Body: ClientRatingCreate }>(
     '/:videoId/rating',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, rbac.requireRoleAtLeast('user')],
       schema: {
         params: z.object({ videoId: IdSchema }),
         body: ClientRatingCreateSchema,

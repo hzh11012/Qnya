@@ -22,7 +22,7 @@ export const HomeCollectionItemSchema = HomeAnimeItemSchema.extend({
   time: z.number().nullable()
 });
 
-/** 类型推荐行（r18 类型仅有权限的用户可见） */
+/** 类型推荐行（adult 类型仅对高级会员/管理员可见） */
 export const HomeTypeRowSchema = z.object({
   type: z.enum(['movie', 'japanese', 'american', 'chinese', 'adult']),
   items: z.array(HomeAnimeItemSchema)

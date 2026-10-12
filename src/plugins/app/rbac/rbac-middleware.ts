@@ -13,6 +13,15 @@ declare module 'fastify' {
 }
 
 const ADULT_ALLOWED_ROLES = ['admin', 'premium'];
+const ADULT_EXCLUDED = ['adult'] as AnimeType[];
+
+/** 角色等级：数值越大权限越高（游客身份最低，需登录接口要求 user 及以上） */
+const ROLE_LEVEL: Record<string, number> = {
+  guest: 0,
+  user: 1,
+  premium: 2,
+  admin: 3
+};
 
 const createRbacMiddleware = () => {
   /** 前置校验：必须先经过 authenticate，避免非空断言崩溃成 500 */
@@ -24,7 +33,27 @@ const createRbacMiddleware = () => {
     return true;
   };
 
+  /**
+   * adult 内容访问权限：由角色决定（高级会员/管理员），角色不满足时统一过滤
+   */
+  const canAccessAdult = (role: string) => ADULT_ALLOWED_ROLES.includes(role);
+
   return {
+    /**
+     * 要求角色等级不低于指定角色（未登录 → 401；等级不足 → 403）
+     * 替代 authenticate 使用，让“需要什么身份”在接口层显式化
+     */
+    requireRoleAtLeast(roleCode: string) {
+      return async (request: FastifyRequest, reply: FastifyReply) => {
+        if (!requireSession(request, reply)) return reply;
+        const role = request.sessionData!.role;
+        // 未知角色要求（roleCode 拼写错误等）一律拒绝，避免误放行
+        if ((ROLE_LEVEL[role] ?? -1) < (ROLE_LEVEL[roleCode] ?? 99)) {
+          return reply.forbidden('权限不足');
+        }
+      };
+    },
+
     requireAnyRole(...roleCodes: string[]) {
       return async (request: FastifyRequest, reply: FastifyReply) => {
         if (!requireSession(request, reply)) return reply;
@@ -38,22 +67,8 @@ const createRbacMiddleware = () => {
     filterAdultTypes() {
       return async (request: FastifyRequest, reply: FastifyReply) => {
         if (!requireSession(request, reply)) return reply;
-        request.excludeTypes = ADULT_ALLOWED_ROLES.includes(
-          request.sessionData!.role
-        )
-          ? undefined
-          : (['adult'] as AnimeType[]);
-      };
-    },
-
-    /** 可选版：未登录/无权限一律排除 adult，登录且角色允许时放行（不拦截请求） */
-    optionalFilterAdultTypes() {
-      return async (request: FastifyRequest) => {
-        request.excludeTypes =
-          request.sessionData &&
-          ADULT_ALLOWED_ROLES.includes(request.sessionData.role)
-            ? undefined
-            : (['adult'] as AnimeType[]);
+        const allowed = canAccessAdult(request.sessionData!.role);
+        request.excludeTypes = allowed ? undefined : ADULT_EXCLUDED;
       };
     }
   };

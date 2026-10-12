@@ -9,13 +9,13 @@ import {
 } from '../../../../schemas/mine.js';
 
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, playRepository } = fastify;
+  const { authenticate, rbac, playRepository } = fastify;
 
   /** 我的追番 */
   fastify.get<{ Querystring: MineListQuery }>(
     '/collections',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, rbac.requireRoleAtLeast('user')],
       schema: {
         querystring: MineListQuerySchema,
         response: {
@@ -43,7 +43,7 @@ export default async function (fastify: FastifyInstance) {
   fastify.get<{ Querystring: MineListQuery }>(
     '/histories',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, rbac.requireRoleAtLeast('user')],
       schema: {
         querystring: MineListQuerySchema,
         response: {

@@ -19,6 +19,12 @@ import {
  * @see {@link https://github.com/fastify/fastify-swagger}
  */
 async function swaggerPlugin(fastify: FastifyInstance) {
+  // 生产环境不暴露 API 文档（避免向攻击者泄露完整接口结构）
+  if (fastify.config.NODE_ENV === 'production') {
+    fastify.log.info('生产环境跳过 Swagger 文档注册');
+    return;
+  }
+
   await fastify.register(swagger, {
     openapi: {
       info: {

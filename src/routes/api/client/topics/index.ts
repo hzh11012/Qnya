@@ -12,11 +12,11 @@ import {
 export default async function (fastify: FastifyInstance) {
   const { authenticate, rbac, topicsRepository, httpErrors } = fastify;
 
-  /** 获取已发布专题列表 */
+  /** 获取已发布专题列表（游客可浏览） */
   fastify.get<{ Querystring: ClientTopicListQuery }>(
     '/',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, rbac.filterAdultTypes()],
       schema: {
         querystring: ClientTopicListQuerySchema,
         response: {
@@ -30,7 +30,7 @@ export default async function (fastify: FastifyInstance) {
     }
   );
 
-  /** 获取专题详情（含关联番剧） */
+  /** 获取专题详情（含关联番剧，游客可浏览，adult 按权限过滤） */
   fastify.get<{ Params: ClientTopicDetailParams }>(
     '/:id',
     {

@@ -9,10 +9,9 @@ export const usersTable = pgTable(
     id: idColumn(),
     name: varchar({ length: 255 }).notNull(),
     email: varchar({ length: 255 }).notNull().unique(),
+    /** 新注册用户默认为游客角色（可浏览，不可播放），由管理端提升 */
     role: userRoleEnum().notNull().default('guest'),
     status: boolean().notNull().default(true),
-    /** r18 内容访问权限（adult 类型仅对该用户可见） */
-    r18: boolean('r18').notNull().default(false),
     avatar: text(),
     ...timestamps
   },

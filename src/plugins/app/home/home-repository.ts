@@ -5,7 +5,6 @@ import {
   animeTable,
   collectionsTable,
   historiesTable,
-  usersTable,
   videosTable
 } from '../../../db/index.js';
 import { buildSeasonSuffix } from '../../../utils/season.js';
@@ -24,16 +23,6 @@ const COLLECTION_LIMIT = 5;
 
 const createHomeRepository = (fastify: FastifyInstance) => {
   const db = fastify.db;
-
-  /** 用户是否有 r18 访问权限 */
-  async function findR18(userId: string): Promise<boolean> {
-    const [row] = await db
-      .select({ r18: usersTable.r18 })
-      .from(usersTable)
-      .where(eq(usersTable.id, userId))
-      .limit(1);
-    return row?.r18 ?? false;
-  }
 
   /** 批量统计番剧集数 + 第一集 id（episode 升序） */
   async function findVideoStats(animeIds: string[]) {
@@ -57,9 +46,6 @@ const createHomeRepository = (fastify: FastifyInstance) => {
   }
 
   return {
-    /** 用户是否有 r18 访问权限 */
-    findR18,
-
     /** 我的追番（最新收藏的前 COLLECTION_LIMIT 部，带观看进度） */
     async findCollections(userId: string) {
       const rows = await db
@@ -114,9 +100,9 @@ const createHomeRepository = (fastify: FastifyInstance) => {
       });
     },
 
-    /** 各类型推荐（每类前 TYPE_ROW_LIMIT 部，按评分降序；adult 类型需 r18 权限） */
-    async findAnimeTypes(r18: boolean) {
-      const types: AnimeType[] = r18
+    /** 各类型推荐（每类前 TYPE_ROW_LIMIT 部，按评分降序；adult 类型仅高级会员/管理员可见） */
+    async findAnimeTypes(isPrivileged: boolean) {
+      const types: AnimeType[] = isPrivileged
         ? ['movie', 'japanese', 'american', 'chinese', 'adult']
         : ['movie', 'japanese', 'american', 'chinese'];
 

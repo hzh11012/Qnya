@@ -8,7 +8,7 @@ import {
 } from '../../../../schemas/feedback.js';
 
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, feedbackRepository, httpErrors } = fastify;
+  const { authenticate, rbac, feedbackRepository, httpErrors } = fastify;
 
   /** 提交问题反馈 */
   fastify.post<{
@@ -17,7 +17,7 @@ export default async function (fastify: FastifyInstance) {
   }>(
     '/:animeId',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, rbac.requireRoleAtLeast('user')],
       schema: {
         params: ClientFeedbackCreateParamsSchema,
         body: ClientFeedbackCreateBodySchema,

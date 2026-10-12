@@ -10,9 +10,9 @@ import {
 import { buildSeasonSuffix } from '../../../../utils/season.js';
 
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, optionalAuthenticate, rbac, animeRepository } = fastify;
+  const { authenticate, rbac, animeRepository } = fastify;
 
-  /** 热门列表：按评分人数排序 */
+  /** 热门列表：按评分人数排序（游客可浏览，adult 按权限过滤） */
   fastify.get<{ Querystring: ClientHotQuery }>(
     '/hot',
     {
@@ -47,7 +47,7 @@ export default async function (fastify: FastifyInstance) {
   fastify.get<{ Querystring: ClientGuessQuery }>(
     '/guess',
     {
-      preHandler: [optionalAuthenticate, rbac.optionalFilterAdultTypes()],
+      preHandler: [authenticate, rbac.filterAdultTypes()],
       schema: {
         querystring: ClientGuessQuerySchema,
         response: {
