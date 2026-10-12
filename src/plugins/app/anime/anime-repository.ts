@@ -4,13 +4,27 @@ import type { AnimeType } from '../../../db/index.js';
 import {
   animeTable,
   animeToTagsTable,
+  collectionsTable,
+  historiesTable,
   tagsTable,
   videosTable
 } from '../../../db/index.js';
-import { and, asc, desc, eq, gt, inArray, notInArray, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  lt,
+  notInArray,
+  sql
+} from 'drizzle-orm';
 import {
   AddAnimeBody,
   AnimeListQuery,
+  parseYearRange,
   UpdateAnimeBody
 } from '../../../schemas/anime.js';
 import { escapeLike } from '../../../utils/like.js';
@@ -412,6 +426,98 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
             desc(animeTable.avgScore),
             asc(animeTable.id)
           )
+          .limit(pageSize)
+          .offset(calcOffset(page, pageSize)),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(animeTable)
+          .where(whereClause)
+      ]);
+
+      const items = await attachMeta(rows);
+      return { items, total: Number(countResult[0]?.count ?? 0) };
+    },
+
+    /**
+     * 客户端筛选列表：各维度单选 + 四种排序
+     *  - score: 综合排序（评分人数 → 均分），与热门一致
+     *  - views / collections: 播放/追番量子查询排序（番剧量级小，可接受）
+     *  - latest: 最近入库优先
+     */
+    async findClientList(params: {
+      page: number;
+      pageSize: number;
+      type?: AnimeType;
+      status?: 'draft' | 'upcoming' | 'airing' | 'completed';
+      /** 年份半开区间 "[from,to)"，更早为 "[,to)" */
+      year?: string;
+      month?: 'january' | 'april' | 'july' | 'october';
+      tag?: string;
+      sort: 'score' | 'rating' | 'views' | 'collections' | 'latest';
+      excludeTypes?: AnimeType[];
+    }) {
+      const { page, pageSize, type, status, year, month, tag, sort } = params;
+      const { excludeTypes } = params;
+
+      const conditions = [notInArray(animeTable.status, ['draft'])];
+      if (excludeTypes?.length) {
+        conditions.push(notInArray(animeTable.type, excludeTypes));
+      }
+      if (type) conditions.push(eq(animeTable.type, type));
+      if (status) conditions.push(eq(animeTable.status, status));
+      if (year) {
+        // 半开区间 [from,to)：from 含端点，to 不含（单年 [y,y+1) 即恰好一年）
+        const { from, to } = parseYearRange(year);
+        if (from) conditions.push(gte(animeTable.year, from));
+        if (to) conditions.push(lt(animeTable.year, to));
+      }
+      if (month) conditions.push(eq(animeTable.month, month));
+      if (tag) {
+        // 标签筛选：命中任一所选标签即返回（当前前端单选）
+        conditions.push(
+          inArray(
+            animeTable.id,
+            db
+              .select({ animeId: animeToTagsTable.animeId })
+              .from(animeToTagsTable)
+              .where(eq(animeToTagsTable.tagId, tag))
+          )
+        );
+      }
+      const whereClause = and(...conditions);
+
+      const orderBy = {
+        score: [
+          desc(animeTable.scoreCount),
+          desc(animeTable.avgScore),
+          asc(animeTable.id)
+        ],
+        rating: [
+          desc(animeTable.avgScore),
+          desc(animeTable.scoreCount),
+          asc(animeTable.id)
+        ],
+        views: [
+          desc(
+            sql`(select count(*) from ${historiesTable} h where h.anime_id = ${animeTable.id})`
+          ),
+          asc(animeTable.id)
+        ],
+        collections: [
+          desc(
+            sql`(select count(*) from ${collectionsTable} c where c.anime_id = ${animeTable.id})`
+          ),
+          asc(animeTable.id)
+        ],
+        latest: [desc(animeTable.createdAt), desc(animeTable.id)]
+      }[sort];
+
+      const [rows, countResult] = await Promise.all([
+        db
+          .select(clientColumns)
+          .from(animeTable)
+          .where(whereClause)
+          .orderBy(...orderBy)
           .limit(pageSize)
           .offset(calcOffset(page, pageSize)),
         db

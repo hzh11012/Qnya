@@ -1,16 +1,25 @@
 import type { FastifyInstance } from 'fastify';
-import { SuccessResponseSchema } from '../../../../schemas/common.js';
+import { z } from 'zod';
+import { IdSchema, SuccessResponseSchema } from '../../../../schemas/common.js';
 import {
   ClientGuessQuerySchema,
   ClientHotQuerySchema,
   ClientHotResponseSchema,
+  ClientListQuerySchema,
   type ClientGuessQuery,
-  type ClientHotQuery
+  type ClientHotQuery,
+  type ClientListQuery
 } from '../../../../schemas/anime.js';
 import { buildSeasonSuffix } from '../../../../utils/season.js';
 
+/** 客户端标签选项响应：只需 id/name */
+const ClientTagsResponseSchema = z.object({
+  items: z.array(z.object({ id: IdSchema, name: z.string() })),
+  total: z.number()
+});
+
 export default async function (fastify: FastifyInstance) {
-  const { authenticate, rbac, animeRepository } = fastify;
+  const { authenticate, rbac, animeRepository, tagsRepository } = fastify;
 
   /** 热门列表：按评分人数排序（游客可浏览，adult 按权限过滤） */
   fastify.get<{ Querystring: ClientHotQuery }>(
@@ -72,6 +81,55 @@ export default async function (fastify: FastifyInstance) {
       }));
 
       return reply.success('获取猜你喜欢成功', { items, total: data.total });
+    }
+  );
+
+  /** 番剧筛选列表：类型/状态/年份/季度/标签单选 + 四种排序（adult 按权限过滤） */
+  fastify.get<{ Querystring: ClientListQuery }>(
+    '/list',
+    {
+      preHandler: [authenticate, rbac.filterAdultTypes()],
+      schema: {
+        querystring: ClientListQuerySchema,
+        response: {
+          200: SuccessResponseSchema(ClientHotResponseSchema)
+        }
+      }
+    },
+    async (request, reply) => {
+      const data = await animeRepository.findClientList({
+        ...request.query,
+        excludeTypes: request.excludeTypes
+      });
+
+      // 展示文案 = 名称 + 季后缀（与热门/搜索一致）
+      const items = data.items.map(a => ({
+        ...a,
+        name: a.name + buildSeasonSuffix(a.season, a.seasonName)
+      }));
+
+      return reply.success('获取番剧列表成功', { items, total: data.total });
+    }
+  );
+
+  /** 标签列表（筛选页风格选项，登录即可；非特权角色只返回可见番剧上的标签） */
+  fastify.get(
+    '/tags',
+    {
+      preHandler: [authenticate],
+      schema: {
+        response: {
+          200: SuccessResponseSchema(ClientTagsResponseSchema)
+        }
+      }
+    },
+    async (request, reply) => {
+      const excludeAdult = !rbac.isAdultAllowed(request.sessionData!.role);
+      const items = await tagsRepository.findClientOptions(excludeAdult);
+      return reply.success('获取标签列表成功', {
+        items,
+        total: items.length
+      });
     }
   );
 }

@@ -70,6 +70,11 @@ const createRbacMiddleware = () => {
         const allowed = canAccessAdult(request.sessionData!.role);
         request.excludeTypes = allowed ? undefined : ADULT_EXCLUDED;
       };
+    },
+
+    /** 角色是否能访问 adult 内容（供需要按角色差异化返回数据的接口使用） */
+    isAdultAllowed(role: string) {
+      return canAccessAdult(role);
     }
   };
 };

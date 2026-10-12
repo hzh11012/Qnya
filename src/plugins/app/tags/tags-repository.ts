@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 import { tagsTable } from '../../../db/index.js';
-import { eq, inArray, like, sql } from 'drizzle-orm';
+import { asc, eq, inArray, like, notInArray, sql } from 'drizzle-orm';
 import { TagsListQuery } from '../../../schemas/tags.js';
 import { escapeLike } from '../../../utils/like.js';
 import { calcOffset, buildOrderBy } from '../../../utils/paginated-query.js';
@@ -12,6 +12,9 @@ declare module 'fastify' {
     tagsRepository: ReturnType<typeof createTagsRepository>;
   }
 }
+
+/** 成人向标签名单：非特权角色（user/guest）在筛选页不可见 */
+const ADULT_TAG_NAMES = ['工口'];
 
 const createTagsRepository = (fastify: FastifyInstance) => {
   const db = fastify.db;
@@ -75,6 +78,21 @@ const createTagsRepository = (fastify: FastifyInstance) => {
           value: sql<string>`${tagsTable.id}::text`
         })
         .from(tagsTable);
+    },
+
+    /**
+     * 客户端筛选页标签选项（按名称排序，不分层页）：
+     *  - excludeAdult 为 false（特权角色）：返回全部标签
+     *  - excludeAdult 为 true（user/guest）：仅排除成人向标签
+     */
+    async findClientOptions(excludeAdult: boolean) {
+      return db
+        .select({ id: tagsTable.id, name: tagsTable.name })
+        .from(tagsTable)
+        .where(
+          excludeAdult ? notInArray(tagsTable.name, ADULT_TAG_NAMES) : undefined
+        )
+        .orderBy(asc(tagsTable.name));
     }
   };
 };
