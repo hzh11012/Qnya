@@ -2,7 +2,7 @@
 set -e
 
 echo "[entrypoint] Running database migrations..."
-node node_modules/drizzle-kit/bin.cjs migrate
+node dist/db/migrate.js
 
 echo "[entrypoint] Starting Qnya..."
 exec supervisord -c /etc/supervisord.conf

@@ -48,19 +48,21 @@ RUN apk add --no-cache nginx supervisor curl unzip \
     \
     && FRONTEND_URL="${FRONTEND_VERSION:+https://github.com/${FRONTEND_REPO}/releases/download/${FRONTEND_VERSION}/dist.zip}" \
     && FRONTEND_URL="${FRONTEND_URL:-https://github.com/${FRONTEND_REPO}/releases/latest/download/dist.zip}" \
-    && curl -sL "$FRONTEND_URL" -o /tmp/frontend.zip \
+    && curl -fsSL --retry 3 "$FRONTEND_URL" -o /tmp/frontend.zip \
     && unzip -q /tmp/frontend.zip -d /tmp/frontend \
     && mv /tmp/frontend/dist /usr/share/nginx/frontend \
     && rm -rf /tmp/frontend.zip /tmp/frontend \
     \
     && ADMIN_URL="${ADMIN_VERSION:+https://github.com/${ADMIN_REPO}/releases/download/${ADMIN_VERSION}/dist.zip}" \
     && ADMIN_URL="${ADMIN_URL:-https://github.com/${ADMIN_REPO}/releases/latest/download/dist.zip}" \
-    && curl -sL "$ADMIN_URL" -o /tmp/admin.zip \
+    && curl -fsSL --retry 3 "$ADMIN_URL" -o /tmp/admin.zip \
     && unzip -q /tmp/admin.zip -d /tmp/admin \
     && mv /tmp/admin/dist /usr/share/nginx/admin \
     && rm -rf /tmp/admin.zip /tmp/admin
 
 WORKDIR /app
+
+ENV NODE_ENV=production
 
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist

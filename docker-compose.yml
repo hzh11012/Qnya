@@ -70,8 +70,14 @@ services:
       - '${ADMIN_PORT:-5001}:5001'
     env_file: .env.docker
     environment:
-      # 容器间连接地址，env_file 里无法预知，在此固定
-      DATABASE_URL: postgres://${POSTGRES_USER:-qnya}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-qnya}
+      # 连接类变量，env_file 里无法预知，在此固定
+      # 注意：应用读取的是分散的 POSTGRES_* 变量（见 src/plugins/external/db.ts），
+      # 而非 DATABASE_URL，二者必须同时满足
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: '5432'
+      POSTGRES_USER: ${POSTGRES_USER:-qnya}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-qnya}
       REDIS_URL: redis://redis:6379
       # Meilisearch（必选，应用启动时会等待其就绪）
       MEILI_URL: ${MEILI_URL-http://meilisearch:7700}
@@ -80,6 +86,10 @@ services:
       RESOURCE_ROOT_PATH: /data/resources
       QBIT_DOWNLOAD_PATH: /downloads
       QBIT_HOST_DOWNLOAD_PATH: /data/downloads
+      # 容器内监听端口固定为 3000（nginx 反代目标）。
+      # .env.docker 中的 PORT 仅表示宿主机对外端口，
+      # 若不在此覆盖，env_file 里的 PORT 会改掉应用监听端口导致 nginx 502
+      PORT: 3000
     depends_on:
       postgres:
         condition: service_healthy
@@ -87,6 +97,8 @@ services:
         condition: service_healthy
       qbit:
         condition: service_healthy
+      meilisearch:
+        condition: service_started
     volumes:
       - ${HOST_RESOURCES_PATH:-./data/resources}:/data/resources
       - ${QBIT_DATA_PATH:-./data/qbit}/downloads:/data/downloads
