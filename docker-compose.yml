@@ -44,7 +44,8 @@ services:
       TZ: Asia/Shanghai
       WEBUI_PORT: 8080
     volumes:
-      - ${QBIT_DATA_PATH:-./data/qbit}/config:/config
+      # 配置存 compose 命名卷（不映射宿主机）；下载目录指向 NAS/NFS
+      - qbit_config:/config
       - ${QBIT_DATA_PATH:-./data/qbit}/downloads:/downloads
     ports:
       - '${QBIT_WEBUI_PORT:-8080}:8080'
