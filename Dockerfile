@@ -20,7 +20,9 @@ COPY src ./src
 COPY drizzle ./drizzle
 COPY drizzle.config.ts package.json tsconfig.json ./
 
-RUN pnpm exec tsc --noEmit false
+RUN pnpm exec tsc --noEmit false \
+    # tsc 不会复制非 TS 资源文件，MCP 技能说明在运行时被 readFileSync 读取
+    && cp src/routes/api/mcp/skills.md dist/routes/api/mcp/skills.md
 
 # ---- Stage 3: Production deps only ----
 FROM node:24-alpine AS prod-deps
@@ -44,12 +46,14 @@ ARG ADMIN_REPO=hzh11012/Qnya-Backend
 ARG ADMIN_VERSION
 
 RUN apk add --no-cache nginx supervisor curl unzip \
-    && mkdir -p /usr/share/nginx/frontend /usr/share/nginx/admin /data/resources /data/downloads /run/nginx \
+    && mkdir -p /data/resources /data/downloads /run/nginx \
     \
     && FRONTEND_URL="${FRONTEND_VERSION:+https://github.com/${FRONTEND_REPO}/releases/download/${FRONTEND_VERSION}/dist.zip}" \
     && FRONTEND_URL="${FRONTEND_URL:-https://github.com/${FRONTEND_REPO}/releases/latest/download/dist.zip}" \
     && curl -fsSL --retry 3 "$FRONTEND_URL" -o /tmp/frontend.zip \
     && unzip -q /tmp/frontend.zip -d /tmp/frontend \
+    # mv 目标目录已存在时会移成子目录，必须先删掉占位空目录
+    && rm -rf /usr/share/nginx/frontend \
     && mv /tmp/frontend/dist /usr/share/nginx/frontend \
     && rm -rf /tmp/frontend.zip /tmp/frontend \
     \
@@ -57,6 +61,7 @@ RUN apk add --no-cache nginx supervisor curl unzip \
     && ADMIN_URL="${ADMIN_URL:-https://github.com/${ADMIN_REPO}/releases/latest/download/dist.zip}" \
     && curl -fsSL --retry 3 "$ADMIN_URL" -o /tmp/admin.zip \
     && unzip -q /tmp/admin.zip -d /tmp/admin \
+    && rm -rf /usr/share/nginx/admin \
     && mv /tmp/admin/dist /usr/share/nginx/admin \
     && rm -rf /tmp/admin.zip /tmp/admin
 
