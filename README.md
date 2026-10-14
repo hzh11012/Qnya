@@ -137,7 +137,23 @@ cp .env.example .env    # 填写必填项
 docker compose up -d --build
 ```
 
-访问：前台 `http://<IP>:${HTTP_PORT:-5000}`，管理后台 `http://<IP>:${HTTP_ADMIN_PORT:-5001}`，qBit WebUI `:8080`。数据库迁移在容器启动时自动执行。
+访问：前台 `http://<IP>:${HTTP_PORT:-80}`，管理后台 `http://<IP>:${HTTP_ADMIN_PORT:-5001}`，qBit WebUI `:8080`。数据库迁移在容器启动时自动执行。
+
+### 部署后配置（必做）
+
+否则下载完成后**不会自动创建入库任务**：
+
+1. **qBit WebUI**（`http://<IP>:8080`）：设置登录账号密码，与 `.env` 中的 `QBIT_USERNAME` / `QBIT_PASSWORD` 保持一致；下载路径设为 `/downloads`
+
+2. **Webhook 回调**：qBit WebUI → 设置 → 下载 → 「种子完成后运行外部程序」，填入：
+
+   ```bash
+   curl -X POST "http://app:3000/api/webhook/qbit?hash=%I&tag=%G&token=<QBIT_WEBHOOK_SECRET>"
+   ```
+
+   `<QBIT_WEBHOOK_SECRET>` 替换为 `.env` 中的实际值。应用只处理打了 `qnya` 标签的种子，其他标签的种子完成后会被忽略；任务创建后需在管理后台任务页手动「入库」
+
+3. **管理员账号**：首次启动时使用 `.env` 中的 `ADMIN_EMAIL` 自动创建管理员，用该邮箱登录管理后台
 
 ## 相关仓库
 
