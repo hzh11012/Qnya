@@ -111,3 +111,4 @@ volumes:
   postgres_data:
   redis_data:
   meili_data:
+  qbit_config:
