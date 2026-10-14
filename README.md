@@ -137,6 +137,11 @@ cp .env.example .env    # 填写必填项
 docker compose up -d --build
 ```
 
+必填项中注意两个宿主机挂载路径（漏填会静默回退到项目目录下的 `./data/...`，导致 NFS 未挂载、资源文件树为空）：
+
+- `HOST_RESOURCES_PATH`：宿主机资源库根目录（NFS 挂载点）→ 容器 `/data/resources`
+- `QBIT_DATA_PATH`：宿主机 qbit 数据目录，其 `downloads` 子目录 → 容器 `/downloads`
+
 访问：前台 `http://<IP>:${HTTP_PORT:-5000}`，管理后台 `http://<IP>:${HTTP_ADMIN_PORT:-5001}`，qBit WebUI `:8080`。数据库迁移在容器启动时自动执行。
 
 ### 部署后配置（必做）
