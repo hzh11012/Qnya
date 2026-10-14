@@ -26,8 +26,9 @@ export const AddAnimeSchema = z.object({
   director: z.string().min(1).max(25),
   cv: z.string().min(1).max(1000),
   season: z.coerce.number().min(1).max(100),
-  // nullable：管理端允许不填季名称（如第一季），由客户端按季数自行展示
-  seasonName: z.string().min(1).max(25).nullable().optional(),
+  // nullable：管理端允许不填季名称（如第一季），由客户端按季数自行展示；
+  // 表单空值通常以 "" 提交，允许它并在仓储层归一化为 null
+  seasonName: z.string().max(25).nullable().optional(),
   tags: z.array(IdSchema).min(1)
 });
 
@@ -53,8 +54,8 @@ export const UpdateAnimeBodySchema = z.object({
   director: z.string().min(1).max(25).optional(),
   cv: z.string().min(1).max(1000).optional(),
   season: z.coerce.number().min(1).max(100).optional(),
-  // nullable 与 optional 语义不同：null 表示清空该字段，缺省表示不修改
-  seasonName: z.string().min(1).max(25).nullable().optional(),
+  // nullable 与 optional 语义不同：null/"" 表示清空该字段，缺省表示不修改
+  seasonName: z.string().max(25).nullable().optional(),
   tags: z.array(IdSchema).min(1).optional()
 });
 

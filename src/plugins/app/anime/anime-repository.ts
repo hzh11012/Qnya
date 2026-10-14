@@ -187,6 +187,10 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
     /** 创建番剧 */
     async create(anime: AddAnimeBody) {
       const { tags, ...animeData } = anime;
+      // 空季名称归一化为 null（“第一季”等无名称的情况由客户端按季数展示）
+      if (animeData.seasonName != null) {
+        animeData.seasonName = animeData.seasonName.trim() || null;
+      }
       const created = await db.transaction(async tx => {
         const [anime] = await tx
           .insert(animeTable)
@@ -206,6 +210,10 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
     /** 更新番剧 */
     async update(id: string, anime: UpdateAnimeBody) {
       const { tags, ...animeData } = anime;
+      // 空/纯空白季名称视为清空该字段
+      if (animeData.seasonName != null) {
+        animeData.seasonName = animeData.seasonName.trim() || null;
+      }
       let updated: typeof animeTable.$inferSelect | undefined;
       await db.transaction(async tx => {
         if (Object.keys(animeData).length > 0) {
