@@ -1,7 +1,14 @@
+import dns from 'node:dns';
 import { buildApp } from './config/app.js';
 import { ensureUtf8Console } from './bootstrap/console.js';
 
 ensureUtf8Console();
+
+// DNS 解析优先 IPv4：部分环境（NAS/家宽）IPv6 路由不通,
+// 系统默认顺序会让 fetch/数据库连接先卡在 IPv6 超时再回退,
+// 显式改为 ipv4first 避免首次请求延迟数秒。
+// 进程级全局生效，覆盖 fetch、Postgres、Redis、SMTP 等所有出站连接
+dns.setDefaultResultOrder('ipv4first');
 
 const start = async () => {
   const app = await buildApp();

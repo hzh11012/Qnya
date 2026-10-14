@@ -35,34 +35,55 @@ export default async function (fastify: FastifyInstance) {
         url.searchParams.set('search', keyword);
       }
 
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        signal: AbortSignal.timeout(10_000),
-        headers: { 'Content-Type': 'application/json' }
-      });
+      try {
+        const response = await fetch(url.toString(), {
+          method: 'GET',
+          signal: AbortSignal.timeout(30_000),
+          headers: { 'Content-Type': 'application/json' }
+        });
 
-      if (!response.ok) {
-        throw httpErrors.internalServerError('服务器错误');
-      }
+        if (!response.ok) {
+          throw httpErrors.badGateway(`资源站返回异常状态: ${response.status}`);
+        }
 
-      const data: any = await response.json();
+        let data: any;
+        try {
+          data = await response.json();
+        } catch {
+          throw httpErrors.badGateway('资源站响应格式异常,请稍后重试');
+        }
 
-      const list = data.resources?.map((item: any) => {
-        return {
-          title: item.title,
-          magnet: item.magnet,
-          size: item.size,
-          fansub: item.fansub?.name || item.publisher?.name,
-          createdAt: item.createdAt
+        const list = data.resources?.map((item: any) => {
+          return {
+            title: item.title,
+            magnet: item.magnet,
+            size: item.size,
+            fansub: item.fansub?.name || item.publisher?.name,
+            createdAt: item.createdAt
+          };
+        });
+
+        const res = {
+          items: list,
+          hasMore: !data.pagination.complete
         };
-      });
 
-      const res = {
-        items: list,
-        hasMore: !data.pagination.complete
-      };
-
-      return reply.success('资源查询成功', res);
+        return reply.success('资源查询成功', res);
+      } catch (error) {
+        // 已是带状态码的 http 错误(badGateway 等)直接透传
+        if (error && typeof error === 'object' && 'statusCode' in error) {
+          throw error;
+        }
+        // fetch 超时(AbortSignal.timeout 抛出 TimeoutError)
+        if (
+          error instanceof Error &&
+          (error.name === 'TimeoutError' || error.name === 'AbortError')
+        ) {
+          throw httpErrors.gatewayTimeout('资源站响应超时,请稍后重试');
+        }
+        // DNS 解析失败、连接拒绝等网络错误
+        throw httpErrors.badGateway('无法连接资源站,请稍后重试');
+      }
     }
   );
 }

@@ -33,11 +33,10 @@ const sensiblePlugin = async (fastify: FastifyInstance) => {
     });
   });
 
-  const isProduction = fastify.config.NODE_ENV === 'production';
-
   // 自定义错误处理器
   // - 4xx 错误：返回原始 message（业务语义，如 "番剧不存在"）
-  // - 5xx 错误：记录完整错误日志，生产环境返回通用提示，开发环境返回真实信息
+  // - 5xx 错误：记录完整错误日志；自部署应用,响应中也返回真实错误信息,
+  //   仅在 message 为空时兒底为通用提示（避免排查时只能看到笼统的 500）
   fastify.setErrorHandler(
     (error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
       const statusCode = error.statusCode || 500;
@@ -54,7 +53,8 @@ const sensiblePlugin = async (fastify: FastifyInstance) => {
       reply.status(statusCode).send({
         code: statusCode,
         message:
-          statusCode >= 500 && isProduction ? '服务器错误' : error.message
+          error.message ||
+          (statusCode >= 500 ? '服务器错误' : `请求失败 (${statusCode})`)
       });
     }
   );
