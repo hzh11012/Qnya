@@ -60,19 +60,14 @@ const schema = {
   required: [
     'POSTGRES_PASSWORD',
     'ADMIN_EMAIL',
-    'REDIS_URL',
-    'MEILI_URL',
     'SESSION_SECRET',
     'SMTP_HOST',
     'SMTP_USER',
     'SMTP_PASS',
     'SMTP_FROM',
-    'QBIT_HOST',
     'QBIT_USERNAME',
     'QBIT_PASSWORD',
-    'QBIT_DOWNLOAD_PATH',
-    'QBIT_WEBHOOK_SECRET',
-    'RESOURCE_ROOT_PATH'
+    'QBIT_WEBHOOK_SECRET'
   ],
   properties: {
     // Environment
@@ -89,10 +84,11 @@ const schema = {
     DB_POOL_MAX: { type: 'number', default: 20 },
     DB_POOL_IDLE_TIMEOUT: { type: 'number', default: 30000 },
     DB_POOL_CONNECTION_TIMEOUT: { type: 'number', default: 2000 },
-    // Redis
-    REDIS_URL: { type: 'string' },
-    // Meilisearch
-    MEILI_URL: { type: 'string' },
+    // Redis / Meilisearch / qBittorrent 连接地址：
+    // 本地开发默认 localhost，Docker 部署由 compose 注入服务名地址，
+    // 因此 .env 中均可留空/注释
+    REDIS_URL: { type: 'string', default: 'redis://localhost:6379' },
+    MEILI_URL: { type: 'string', default: 'http://localhost:7700' },
     MEILI_MASTER_KEY: { type: 'string', default: '' },
     // Session
     // [可选] cookie 域（裸域名）；留空 = 仅当前主机生效，IP/localhost 访问均可
@@ -112,14 +108,16 @@ const schema = {
     SMTP_PASS: { type: 'string' },
     SMTP_FROM: { type: 'string' },
     // qBittorrent
-    QBIT_HOST: { type: 'string' },
+    QBIT_HOST: { type: 'string', default: 'http://localhost:8080' },
     QBIT_USERNAME: { type: 'string' },
     QBIT_PASSWORD: { type: 'string' },
-    QBIT_DOWNLOAD_PATH: { type: 'string' },
-    QBIT_HOST_DOWNLOAD_PATH: { type: 'string' },
+    // 下载目录/资源根目录：无通用默认值，本地开发需手动填写；
+    // Docker 部署由 compose 注入，留空即可
+    QBIT_DOWNLOAD_PATH: { type: 'string', default: '' },
+    QBIT_HOST_DOWNLOAD_PATH: { type: 'string', default: '' },
     QBIT_WEBHOOK_SECRET: { type: 'string' },
     // Resource
-    RESOURCE_ROOT_PATH: { type: 'string' },
+    RESOURCE_ROOT_PATH: { type: 'string', default: '' },
     // TMDB
     TMDB_API_KEY: { type: 'string' },
     TMDB_IMAGE_DOMAIN: { type: 'string', default: 'image.tmdb.org' },

@@ -137,7 +137,7 @@ cp .env.example .env    # 填写必填项
 docker compose up -d --build
 ```
 
-访问：前台 `http://<IP>:${HTTP_PORT:-80}`，管理后台 `http://<IP>:${HTTP_ADMIN_PORT:-5001}`，qBit WebUI `:8080`。数据库迁移在容器启动时自动执行。
+访问：前台 `http://<IP>:${HTTP_PORT:-5000}`，管理后台 `http://<IP>:${HTTP_ADMIN_PORT:-5001}`，qBit WebUI `:8080`。数据库迁移在容器启动时自动执行。
 
 ### 部署后配置（必做）
 
