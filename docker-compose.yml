@@ -84,7 +84,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-qnya}
       REDIS_URL: redis://redis:6379
       # Meilisearch（必选，应用启动时会等待其就绪）
-      MEILI_URL: ${MEILI_URL-http://meilisearch:7700}
+      # :- 确保 .env 里留空时也回退到服务名，避免 localhost 误注入容器
+      MEILI_URL: ${MEILI_URL:-http://meilisearch:7700}
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY-}
       QBIT_HOST: http://qbit:8080
       RESOURCE_ROOT_PATH: /data/resources
