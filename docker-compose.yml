@@ -67,9 +67,12 @@ services:
         ADMIN_VERSION: ${ADMIN_VERSION:-}
     restart: unless-stopped
     ports:
-      - '${PORT:-5000}:5000'
-      - '${ADMIN_PORT:-5001}:5001'
-    env_file: .env.docker
+      # 对外端口与容器内监听端口(PORT)彻底分离，避免同名变量互相覆盖
+      - '${HTTP_PORT:-5000}:5000'
+      - '${HTTP_ADMIN_PORT:-5001}:5001'
+    # 与插值同源：compose 自动读取项目根目录 .env，
+    # 应用配置与启动命令零参数
+    env_file: .env
     environment:
       # 连接类变量，env_file 里无法预知，在此固定
       # 注意：应用读取的是分散的 POSTGRES_* 变量（见 src/plugins/external/db.ts），

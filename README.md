@@ -127,7 +127,17 @@ pnpm dev
 
 ## Docker 部署
 
-`docker-compose.yml` 提供完整的一套栈：PostgreSQL 17、Redis 7、Meilisearch、qBittorrent 与 app 本体（构建时自动拉取 Qnya-Frontend 产物一并打包，Nginx 托管静态资源并反代 API）。部署配置参考 `.env.docker.example`。
+`docker-compose.yml` 提供完整的一套栈：PostgreSQL 17、Redis 7、Meilisearch、qBittorrent 与 app 本体（构建时自动拉取 Qnya-Frontend 产物一并打包，Nginx 托管静态资源并反代 API）。
+
+配置与本地开发共用一份 `.env`（复制 `.env.example` 后填写必填项）；容器内的连接地址由 compose 自动注入，无需修改：
+
+```bash
+cp .env.example .env    # 填写必填项
+# 局域网 HTTP 访问请将 NODE_ENV 改为 development（否则 cookie 带 Secure 标记无法登录）
+docker compose up -d --build
+```
+
+访问：前台 `http://<IP>:${HTTP_PORT:-5000}`，管理后台 `http://<IP>:${HTTP_ADMIN_PORT:-5001}`，qBit WebUI `:8080`。数据库迁移在容器启动时自动执行。
 
 ## 相关仓库
 

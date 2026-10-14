@@ -62,7 +62,6 @@ const schema = {
     'ADMIN_EMAIL',
     'REDIS_URL',
     'MEILI_URL',
-    'SESSION_DOMAIN',
     'SESSION_SECRET',
     'SMTP_HOST',
     'SMTP_USER',
@@ -96,7 +95,8 @@ const schema = {
     MEILI_URL: { type: 'string' },
     MEILI_MASTER_KEY: { type: 'string', default: '' },
     // Session
-    SESSION_DOMAIN: { type: 'string' },
+    // [可选] cookie 域（裸域名）；留空 = 仅当前主机生效，IP/localhost 访问均可
+    SESSION_DOMAIN: { type: 'string', default: '' },
     // 会话签名密钥：过短的密钥可被暴力伪造 cookie 签名，启动时直接拒绝
     SESSION_SECRET: { type: 'string', minLength: 32 },
     SESSION_MAX_AGE: { type: 'number', default: 604800000 },
