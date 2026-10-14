@@ -144,6 +144,20 @@ docker compose up -d --build
 
 访问：前台 `http://<IP>:${HTTP_PORT:-5000}`，管理后台 `http://<IP>:${HTTP_ADMIN_PORT:-5001}`，qBit WebUI `:8080`。数据库迁移在容器启动时自动执行。
 
+### 更新前台/后台产物
+
+前台与管理后台的前端产物在构建时从 GitHub Release 拉取。直接重新 build 会命中 Docker 层缓存（`latest` 是动态地址，缓存无法感知新版本），需在 `.env` 中锁定版本号触发重新下载：
+
+```bash
+# .env 中设置（或更新）版本号
+FRONTEND_VERSION=v1.0.1
+ADMIN_VERSION=v1.1.2
+
+docker compose up -d --build app
+```
+
+版本号变更会使下载层缓存失效，只重跑下载步骤；不设置版本号则始终拉取 latest release，但更新时必须 `docker compose build --no-cache app` 全量重建。
+
 ### 部署后配置（必做）
 
 否则下载完成后**不会自动创建入库任务**：
