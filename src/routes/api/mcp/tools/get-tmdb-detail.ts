@@ -82,10 +82,10 @@ export function registerGetTmdbDetail(
                   name: detail.title ?? '',
                   description: detail.overview ?? '暂无简介',
                   cover: detail.poster_path
-                    ? `https://wsrv.nl/?url=https://${config.TMDB_IMAGE_DOMAIN}/t/p/w185${detail.poster_path}`
+                    ? `https://${config.TMDB_IMAGE_DOMAIN}/t/p/w342${detail.poster_path}`
                     : '',
                   banner: detail.backdrop_path
-                    ? `https://wsrv.nl/?url=https://${config.TMDB_IMAGE_DOMAIN}/t/p/w342${detail.backdrop_path}`
+                    ? `https://${config.TMDB_IMAGE_DOMAIN}/t/p/w500${detail.backdrop_path}`
                     : '',
                   type: mapType(
                     detail.adult ?? false,
@@ -160,7 +160,7 @@ export function registerGetTmdbDetail(
                     mediaType
                   ),
                   banner: series.backdrop_path
-                    ? `https://wsrv.nl/?url=https://${config.TMDB_IMAGE_DOMAIN}/t/p/w342${series.backdrop_path}`
+                    ? `https://${config.TMDB_IMAGE_DOMAIN}/t/p/w500${series.backdrop_path}`
                     : '',
                   seasons
                 },
@@ -206,10 +206,10 @@ export function registerGetTmdbDetail(
                 description:
                   seasonDetail?.overview || series.overview || '暂无简介',
                 cover: posterPath
-                  ? `https://wsrv.nl/?url=https://${config.TMDB_IMAGE_DOMAIN}/t/p/w185${posterPath}`
+                  ? `https://${config.TMDB_IMAGE_DOMAIN}/t/p/w342${posterPath}`
                   : '',
                 banner: series.backdrop_path
-                  ? `https://wsrv.nl/?url=https://${config.TMDB_IMAGE_DOMAIN}/t/p/w342${series.backdrop_path}`
+                  ? `https://${config.TMDB_IMAGE_DOMAIN}/t/p/w500${series.backdrop_path}`
                   : '',
                 type: mapType(
                   series.adult ?? false,

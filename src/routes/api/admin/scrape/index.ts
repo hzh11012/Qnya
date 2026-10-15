@@ -59,7 +59,7 @@ export default async function (fastify: FastifyInstance) {
             name: isMovie ? item.title : item.name,
             overview: item.overview ?? '',
             cover: item.poster_path
-              ? `https://wsrv.nl/?url=https://${config.TMDB_IMAGE_DOMAIN}/t/p/w342${item.poster_path}`
+              ? `https://${config.TMDB_IMAGE_DOMAIN}/t/p/w342${item.poster_path}`
               : null
           };
         });
@@ -135,10 +135,10 @@ export default async function (fastify: FastifyInstance) {
         name: (isMovie ? detail.title : detail.name) ?? '',
         description: detail.overview ?? '',
         cover: detail.poster_path
-          ? `https://wsrv.nl/?url=https://${config.TMDB_IMAGE_DOMAIN}/t/p/w185${detail.poster_path}`
+          ? `https://${config.TMDB_IMAGE_DOMAIN}/t/p/w342${detail.poster_path}`
           : null,
         banner: detail.backdrop_path
-          ? `https://wsrv.nl/?url=https://${config.TMDB_IMAGE_DOMAIN}/t/p/w342${detail.backdrop_path}`
+          ? `https://${config.TMDB_IMAGE_DOMAIN}/t/p/w500${detail.backdrop_path}`
           : null,
         status: 'draft' as const,
         type: mapType(
