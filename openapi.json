@@ -96,7 +96,6 @@
                   "seasonName": {
                     "nullable": true,
                     "type": "string",
-                    "minLength": 1,
                     "maxLength": 25
                   },
                   "tags": {
@@ -585,7 +584,6 @@
                   "seasonName": {
                     "nullable": true,
                     "type": "string",
-                    "minLength": 1,
                     "maxLength": 25
                   },
                   "tags": {
@@ -3519,7 +3517,7 @@
                   "path": {
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 25
+                    "maxLength": 50
                   }
                 },
                 "required": ["id", "path"]
@@ -5454,10 +5452,6 @@
                               "name": {
                                 "type": "string"
                               },
-                              "cover": {
-                                "nullable": true,
-                                "type": "string"
-                              },
                               "remark": {
                                 "nullable": true,
                                 "type": "string"
@@ -5468,6 +5462,10 @@
                               },
                               "videoCount": {
                                 "type": "number"
+                              },
+                              "banner": {
+                                "nullable": true,
+                                "type": "string"
                               },
                               "episode": {
                                 "nullable": true,
@@ -5482,10 +5480,10 @@
                               "animeId",
                               "videoId",
                               "name",
-                              "cover",
                               "remark",
                               "status",
                               "videoCount",
+                              "banner",
                               "episode",
                               "time"
                             ],

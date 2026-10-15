@@ -14,8 +14,11 @@ export const HomeAnimeItemSchema = z.object({
   videoCount: z.number()
 });
 
-/** 我的追番条目（横版 16/9 卡，带观看进度） */
-export const HomeCollectionItemSchema = HomeAnimeItemSchema.extend({
+/** 我的追番条目（横版 16/9 卡，用 banner；带观看进度） */
+export const HomeCollectionItemSchema = HomeAnimeItemSchema.omit({
+  cover: true
+}).extend({
+  banner: z.string().nullable(),
   /** 观看到的集数（无观看记录为 null） */
   episode: z.number().nullable(),
   /** 观看进度秒数（无观看记录为 null） */

@@ -34,7 +34,8 @@ const createHomeRepository = (fastify: FastifyInstance) => {
           name: animeTable.name,
           season: animeTable.season,
           seasonName: animeTable.seasonName,
-          cover: animeTable.cover,
+          // 横版卡片用 banner（竖版海报不合适）
+          banner: animeTable.banner,
           remark: animeTable.remark,
           status: animeTable.status,
           // 观看进度：历史记录是番剧维度（每番至多一条）
@@ -70,7 +71,7 @@ const createHomeRepository = (fastify: FastifyInstance) => {
           // 优先跳转到观看过的那一集（续播），否则取第一集
           videoId: row.watchedVideoId ?? stats?.firstId ?? null,
           name: row.name + buildSeasonSuffix(row.season, row.seasonName),
-          cover: row.cover,
+          banner: row.banner,
           remark: row.remark,
           status: row.status,
           videoCount: stats?.count ?? 0,
