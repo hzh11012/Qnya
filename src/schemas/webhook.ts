@@ -45,7 +45,7 @@ export type DeleteTaskBody = z.infer<typeof DeleteTaskSchema>;
 
 export const IngestTaskSchema = z.object({
   id: IdSchema,
-  path: z.string().min(1).max(25)
+  path: z.string().min(1).max(50)
 });
 
 export type IngestTaskBody = z.infer<typeof IngestTaskSchema>;
