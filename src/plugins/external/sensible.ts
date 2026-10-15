@@ -40,10 +40,12 @@ const sensiblePlugin = async (fastify: FastifyInstance) => {
   fastify.setErrorHandler(
     (error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
       const statusCode = error.statusCode || 500;
+      // 5xx 拆包 drizzle 等框架包装的错误，日志与响应都给出真实原因
+      const normalized = statusCode >= 500 ? normalizeError(error) : error;
 
       if (statusCode >= 500) {
         request.log.error(
-          { err: normalizeError(error) },
+          { err: normalized },
           'Unhandled error in %s %s',
           request.method,
           request.url
@@ -53,7 +55,7 @@ const sensiblePlugin = async (fastify: FastifyInstance) => {
       reply.status(statusCode).send({
         code: statusCode,
         message:
-          error.message ||
+          normalized.message ||
           (statusCode >= 500 ? '服务器错误' : `请求失败 (${statusCode})`)
       });
     }
