@@ -16,8 +16,8 @@ declare module 'fastify' {
 interface CreateTaskParams {
   torrentHash: string;
   fileIndex: number;
+  /** 文件在下载目录中的相对路径 */
   filename: string;
-  filePath: string;
   fileSize: number;
 }
 

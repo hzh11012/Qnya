@@ -90,7 +90,13 @@ export default async function (fastify: FastifyInstance) {
         throw httpErrors.badRequest('任务状态不允许入库');
       }
 
-      const sourcePath = task.filePath;
+      // 源路径动态拼接：任务只存相对路径，用当下配置还原，挂载变更对存量任务依然有效
+      const downloadRoot = path.resolve(config.QBIT_HOST_DOWNLOAD_PATH);
+      const sourcePath = path.resolve(downloadRoot, task.filename);
+      // 安全检查：filename 来自种子文件列表，防止拼接后逃出下载目录
+      if (!sourcePath.startsWith(downloadRoot + path.sep)) {
+        throw httpErrors.badRequest('非法文件路径');
+      }
       const ext = path.extname(task.filename);
       const targetPath = path.join(resolvedDest, `index${ext}`);
 

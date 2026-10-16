@@ -69,15 +69,12 @@ export default async function (fastify: FastifyInstance) {
         return reply.success('无视频文件');
       }
 
-      // 创建任务记录
-      const hostDownloadPath =
-        config.QBIT_HOST_DOWNLOAD_PATH || torrentInfo.save_path;
-
+      // 创建任务记录（只存相对路径，入库时与 QBIT_HOST_DOWNLOAD_PATH 动态拼接，
+      // 避免绝对路径快照在挂载变更后失效）
       const taskParams = videoFiles.map(f => ({
         torrentHash: hash,
         fileIndex: f.index,
-        filename: f.name.split('/').pop() || f.name,
-        filePath: `${hostDownloadPath}/${f.name}`,
+        filename: f.name,
         fileSize: f.size
       }));
 

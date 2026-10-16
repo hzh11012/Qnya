@@ -46,3 +46,4 @@ yarn-error.log*
 
 # 本地生成的文档，不入库
 /docs/
+.envssss

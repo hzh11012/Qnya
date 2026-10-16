@@ -11,7 +11,7 @@ export function registerListTasks(server: McpServer, fastify: FastifyInstance) {
       description:
         '查看下载完成后待入库的文件任务列表。' +
         '下载完成时 webhook 自动创建 pending 任务，入库后变为 completed。' +
-        '返回字段包含 id（入库时需要）、filename、filePath、fileSize、torrentHash、status。',
+        '返回字段包含 id（入库时需要）、filename（下载目录内相对路径）、fileSize、torrentHash、status。',
       inputSchema: {
         status: z
           .array(z.enum(['pending', 'completed']))
@@ -35,7 +35,6 @@ export function registerListTasks(server: McpServer, fastify: FastifyInstance) {
       const simplified = items.map(t => ({
         id: t.id,
         filename: t.filename,
-        filePath: t.filePath,
         sizeMB: Math.round(t.fileSize / 1024 / 1024),
         torrentHash: t.torrentHash,
         status: t.status,

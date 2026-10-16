@@ -15,10 +15,8 @@ export const tasksTable = pgTable(
     fileIndex: integer('file_index').notNull(),
 
     // === 文件信息 ===
-    /** 文件名 */
+    /** 文件在下载目录中的相对路径（可能带子目录，入库时与 QBIT_HOST_DOWNLOAD_PATH 动态拼接） */
     filename: varchar('filename', { length: 500 }).notNull(),
-    /** 下载后的完整路径 */
-    filePath: varchar('file_path', { length: 1000 }).notNull(),
     /** 文件大小 (字节) */
     fileSize: bigint('file_size', { mode: 'number' }).notNull(),
 
