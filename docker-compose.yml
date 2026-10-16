@@ -107,8 +107,11 @@ services:
       meilisearch:
         condition: service_started
     volumes:
+      # 资源根目录整体挂载（含 downloads 子目录）。
+      # 注意：qbit 下载目录必须是该目录的子目录（QBIT_DATA_PATH 在 HOST_RESOURCES_PATH 内），
+      # 不要再单独把 downloads 挂进来——同一文件系统挂两个挂载点会导致
+      # 入库 rename 跨挂载点报 EXDEV，退化为全文件复制（rename(2) 的内核行为）
       - ${HOST_RESOURCES_PATH:-./data/resources}:/data/resources
-      - ${QBIT_DATA_PATH:-./data/qbit}/downloads:/data/resources/downloads
 
 volumes:
   postgres_data:
