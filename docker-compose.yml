@@ -90,7 +90,9 @@ services:
       QBIT_HOST: http://qbit:8080
       RESOURCE_ROOT_PATH: /data/resources
       QBIT_DOWNLOAD_PATH: /downloads
-      QBIT_HOST_DOWNLOAD_PATH: /data/downloads
+      # app 容器内下载目录（与下方 volumes 挂载保持一致）：
+      # qbit 的下载目录同时作为资源根目录的子目录暴露，入库/媒体服务可直接读取
+      QBIT_HOST_DOWNLOAD_PATH: /data/resources/downloads
       # 容器内监听端口固定为 3000（nginx 反代目标）。
       # .env.docker 中的 PORT 仅表示宿主机对外端口，
       # 若不在此覆盖，env_file 里的 PORT 会改掉应用监听端口导致 nginx 502
@@ -106,7 +108,7 @@ services:
         condition: service_started
     volumes:
       - ${HOST_RESOURCES_PATH:-./data/resources}:/data/resources
-      - ${QBIT_DATA_PATH:-./data/qbit}/downloads:/data/downloads
+      - ${QBIT_DATA_PATH:-./data/qbit}/downloads:/data/resources/downloads
 
 volumes:
   postgres_data:
