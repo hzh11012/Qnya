@@ -65,6 +65,8 @@ export const ClientPlayDetailSchema = z.object({
   /** 当前集恢复进度：仅当历史记录属于当前集时非 0 */
   time: z.number(),
   isCollected: z.boolean(),
+  /** 所属系列真名 */
+  seriesName: z.string(),
   isRating: z.boolean(),
   series: z.array(ClientPlayAnimeItemSchema),
   recommendations: z.array(ClientPlayAnimeItemSchema)

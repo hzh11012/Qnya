@@ -6,6 +6,7 @@ import {
   collectionsTable,
   historiesTable,
   scoresTable,
+  seriesTable,
   videosTable,
   type AnimeType
 } from '../../../db/index.js';
@@ -111,16 +112,21 @@ const createPlayRepository = (fastify: FastifyInstance) => {
       userId: string,
       excludeTypes: AnimeType[] | undefined
     ) {
-      // video + anime 一次 join 查出（video 不存在或番剧不存在同属无效）
+      // video + anime + series 一次 join 查出（video 不存在或番剧不存在同属无效）
       const [row] = await db
-        .select({ video: videosTable, anime: animeTable })
+        .select({
+          video: videosTable,
+          anime: animeTable,
+          seriesName: seriesTable.name
+        })
         .from(videosTable)
         .innerJoin(animeTable, eq(videosTable.animeId, animeTable.id))
+        .innerJoin(seriesTable, eq(animeTable.seriesId, seriesTable.id))
         .where(eq(videosTable.id, videoId))
         .limit(1);
       if (!row) return null;
 
-      const { video, anime } = row;
+      const { video, anime, seriesName } = row;
       if (excludeTypes?.includes(anime.type)) return null;
 
       const [
@@ -245,6 +251,7 @@ const createPlayRepository = (fastify: FastifyInstance) => {
         time: animeHistory[0]?.videoId === videoId ? animeHistory[0].time : 0,
         isCollected: collection.length > 0,
         isRating: score.length > 0,
+        seriesName,
         series,
         recommendations
       };

@@ -5931,6 +5931,9 @@
                         "isCollected": {
                           "type": "boolean"
                         },
+                        "seriesName": {
+                          "type": "string"
+                        },
                         "isRating": {
                           "type": "boolean"
                         },
@@ -6084,6 +6087,7 @@
                         "history",
                         "time",
                         "isCollected",
+                        "seriesName",
                         "isRating",
                         "series",
                         "recommendations"
