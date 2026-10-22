@@ -1,10 +1,14 @@
 import { z } from 'zod';
 import { IdSchema, PaginationQuerySchema } from './common.js';
 
-/** 我的页面列表分页参数 */
+/** 我的页面列表分页参数（keyword 仅 histories 使用） */
 export const MineListQuerySchema = z.preprocess(
   val => val ?? {},
-  z.object({ ...PaginationQuerySchema })
+  z.object({
+    ...PaginationQuerySchema,
+    /** 关键字：按番剧名模糊匹配历史记录 */
+    keyword: z.string().trim().max(50).optional()
+  })
 );
 
 export type MineListQuery = z.infer<typeof MineListQuerySchema>;
