@@ -17,7 +17,8 @@ export const UserInfoSchema = z.object({
   email: EmailSchema,
   name: z.string(),
   role: z.enum(['admin', 'premium', 'user', 'guest']),
-  avatar: z.string().nullable()
+  avatar: z.string().nullable(),
+  createdAt: z.coerce.date()
 });
 
 /** 更新个人资料：avatar 为压缩后的 base64 dataURL 或 null（清除头像） */

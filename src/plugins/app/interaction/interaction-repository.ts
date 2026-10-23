@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
-import { and, asc, desc, eq, ilike, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, sql } from 'drizzle-orm';
 import {
   animeTable,
   collectionsTable,
@@ -90,6 +90,25 @@ const createInteractionRepository = (fastify: FastifyInstance) => {
           target: [historiesTable.userId, historiesTable.animeId],
           set: { videoId, time: data.time }
         });
+    },
+
+    /** 用户统计：追番数与历史部数（我的页面信息条展示用） */
+    async getUserStats(userId: string) {
+      // 两个计数互不依赖，并行发（复用连接池）
+      const [collections, histories] = await Promise.all([
+        db
+          .select({ value: count() })
+          .from(collectionsTable)
+          .where(eq(collectionsTable.userId, userId)),
+        db
+          .select({ value: count() })
+          .from(historiesTable)
+          .where(eq(historiesTable.userId, userId))
+      ]);
+      return {
+        collections: collections[0].value,
+        histories: histories[0].value
+      };
     },
 
     /** 删除用户对某动漫的历史记录，返回是否有删除 */

@@ -5,11 +5,31 @@ import {
   MineCollectionItemSchema,
   MineHistoryItemSchema,
   MineListQuery,
-  MineListQuerySchema
+  MineListQuerySchema,
+  MineStatsSchema
 } from '../../../../schemas/mine.js';
 
 export default async function (fastify: FastifyInstance) {
   const { authenticate, rbac, interactionRepository } = fastify;
+
+  /** 我的页面统计（信息条展示用） */
+  fastify.get(
+    '/stats',
+    {
+      preHandler: [authenticate, rbac.requireRoleAtLeast('user')],
+      schema: {
+        response: {
+          200: SuccessResponseSchema(MineStatsSchema)
+        }
+      }
+    },
+    async (request, reply) => {
+      const stats = await interactionRepository.getUserStats(
+        request.sessionData!.userId
+      );
+      return reply.success('获取我的统计成功', stats);
+    }
+  );
 
   /** 我的追番 */
   fastify.get<{ Querystring: MineListQuery }>(

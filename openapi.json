@@ -4664,9 +4664,20 @@
                         "avatar": {
                           "nullable": true,
                           "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
                         }
                       },
-                      "required": ["id", "email", "name", "role", "avatar"],
+                      "required": [
+                        "id",
+                        "email",
+                        "name",
+                        "role",
+                        "avatar",
+                        "createdAt"
+                      ],
                       "additionalProperties": false
                     }
                   },
@@ -4741,9 +4752,20 @@
                         "avatar": {
                           "nullable": true,
                           "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
                         }
                       },
-                      "required": ["id", "email", "name", "role", "avatar"],
+                      "required": [
+                        "id",
+                        "email",
+                        "name",
+                        "role",
+                        "avatar",
+                        "createdAt"
+                      ],
                       "additionalProperties": false
                     }
                   },
@@ -4871,9 +4893,20 @@
                         "avatar": {
                           "nullable": true,
                           "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
                         }
                       },
-                      "required": ["id", "email", "name", "role", "avatar"],
+                      "required": [
+                        "id",
+                        "email",
+                        "name",
+                        "role",
+                        "avatar",
+                        "createdAt"
+                      ],
                       "additionalProperties": false
                     }
                   },
@@ -5563,6 +5596,46 @@
                         }
                       },
                       "required": ["collections", "animeTypes"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["code", "message", "data"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/client/mine/stats": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number",
+                      "enum": [200]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "collections": {
+                          "type": "number"
+                        },
+                        "histories": {
+                          "type": "number"
+                        }
+                      },
+                      "required": ["collections", "histories"],
                       "additionalProperties": false
                     }
                   },

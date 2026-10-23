@@ -37,3 +37,9 @@ export const MineHistoryItemSchema = z.object({
   time: z.number(),
   watchedAt: z.date()
 });
+
+/** 我的页面统计（信息条展示用） */
+export const MineStatsSchema = z.object({
+  collections: z.number(),
+  histories: z.number()
+});
