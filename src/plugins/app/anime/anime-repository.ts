@@ -32,6 +32,22 @@ import { calcOffset, buildOrderBy } from '../../../utils/paginated-query.js';
 import { t2s } from '../../../utils/t2s.js';
 import { buildSeasonSuffix } from '../../../utils/season.js';
 
+/**
+ * 贝叶斯加权评分门槛 m：评分人数低于该值的番剧会被拉向全站均分，
+ * 避免「1 人 5 星」的冷门番霸榜。随站点规模调整（IMDb 为 25000）
+ */
+const BAYES_MIN_SCORES = 30;
+
+/**
+ * 全站加权均分 C（WR 公式的先验）：非 draft 番剧按评分人数加权的均分。
+ * 无关联子查询，PG 会走 InitPlan 只算一次
+ */
+const globalMeanScore = sql`(
+  select coalesce(sum(score_count * avg_score) / nullif(sum(score_count), 0), 0)
+  from ${animeTable}
+  where ${animeTable.status} <> 'draft'
+)`;
+
 declare module 'fastify' {
   interface FastifyInstance {
     animeRepository: ReturnType<typeof createAnimeRepository>;
@@ -412,7 +428,9 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
 
     /**
      * 客户端筛选列表：各维度单选 + 四种排序
-     *  - score: 综合排序（评分人数 → 均分），与热门一致
+     *  - score: 综合排序（IMDb 式贝叶斯加权 WR），与热门一致：
+     *    WR = v/(v+m)·R + m/(v+m)·C，v=评分人数、R=均分、m=门槛、C=全站加权均分；
+     *    人数多的番按自身均分排名，人数少的被拉向全站均分，兼顾质量与热度
      *  - views / collections: 播放/追番量子查询排序（番剧量级小，可接受）
      *  - latest: 最近入库优先
      */
@@ -460,8 +478,14 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
 
       const orderBy = {
         score: [
+          desc(sql`(
+            (${animeTable.scoreCount}::numeric / (${animeTable.scoreCount} + ${BAYES_MIN_SCORES})) *
+              ${animeTable.avgScore}
+            + (${BAYES_MIN_SCORES}::numeric / (${animeTable.scoreCount} + ${BAYES_MIN_SCORES})) *
+              ${globalMeanScore}
+          )`),
+          // WR 平票（含未评分番剧 WR = C）时，有评分的排在未评分前
           desc(animeTable.scoreCount),
-          desc(animeTable.avgScore),
           asc(animeTable.id)
         ],
         rating: [

@@ -139,7 +139,7 @@ export const parseYearRange = (year: string) => {
  *  - type: 1剧场版 2日番 3美漫 4国创 5里番
  *  - status: 1连载中 2已完结 3即将开播
  *  - month: 1/4/7/10 月
- *  - sort: 1综合 2最高评分 3播放 4追番 5更新（默认 1）
+ *  - sort: 1综合（贝叶斯加权 WR） 2最高评分 3播放 4追番 5更新（默认 1）
  */
 const codeToValue = <T extends string>(map: Record<number, T>) =>
   z.coerce
