@@ -5466,6 +5466,112 @@
                     "data": {
                       "type": "object",
                       "properties": {
+                        "banners": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "animeId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "videoId": {
+                                "nullable": true,
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "banner": {
+                                "nullable": true,
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "remark": {
+                                "nullable": true,
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": ["upcoming", "airing", "completed"]
+                              },
+                              "videoCount": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "animeId",
+                              "videoId",
+                              "name",
+                              "banner",
+                              "description",
+                              "remark",
+                              "status",
+                              "videoCount"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "picks": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "animeId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "videoId": {
+                                "nullable": true,
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "cover": {
+                                "nullable": true,
+                                "type": "string"
+                              },
+                              "remark": {
+                                "nullable": true,
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": ["upcoming", "airing", "completed"]
+                              },
+                              "videoCount": {
+                                "type": "number"
+                              },
+                              "score": {
+                                "type": "number"
+                              },
+                              "scoreCount": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "animeId",
+                              "videoId",
+                              "name",
+                              "cover",
+                              "remark",
+                              "status",
+                              "videoCount",
+                              "score",
+                              "scoreCount"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
                         "collections": {
                           "type": "array",
                           "items": {
@@ -5496,6 +5602,12 @@
                               "videoCount": {
                                 "type": "number"
                               },
+                              "score": {
+                                "type": "number"
+                              },
+                              "scoreCount": {
+                                "type": "number"
+                              },
                               "banner": {
                                 "nullable": true,
                                 "type": "string"
@@ -5516,6 +5628,8 @@
                               "remark",
                               "status",
                               "videoCount",
+                              "score",
+                              "scoreCount",
                               "banner",
                               "episode",
                               "time"
@@ -5575,6 +5689,12 @@
                                     },
                                     "videoCount": {
                                       "type": "number"
+                                    },
+                                    "score": {
+                                      "type": "number"
+                                    },
+                                    "scoreCount": {
+                                      "type": "number"
                                     }
                                   },
                                   "required": [
@@ -5584,7 +5704,9 @@
                                     "cover",
                                     "remark",
                                     "status",
-                                    "videoCount"
+                                    "videoCount",
+                                    "score",
+                                    "scoreCount"
                                   ],
                                   "additionalProperties": false
                                 }
@@ -5595,7 +5717,12 @@
                           }
                         }
                       },
-                      "required": ["collections", "animeTypes"],
+                      "required": [
+                        "banners",
+                        "picks",
+                        "collections",
+                        "animeTypes"
+                      ],
                       "additionalProperties": false
                     }
                   },
