@@ -31,22 +31,11 @@ import { escapeLike } from '../../../utils/like.js';
 import { calcOffset, buildOrderBy } from '../../../utils/paginated-query.js';
 import { t2s } from '../../../utils/t2s.js';
 import { buildSeasonSuffix } from '../../../utils/season.js';
+import { bayesianWeightedScore } from '../../../utils/bayesian.js';
 
 /**
- * 贝叶斯加权评分门槛 m：评分人数低于该值的番剧会被拉向全站均分，
- * 避免「1 人 5 星」的冷门番霸榜。随站点规模调整（IMDb 为 25000）
+ * 贝叶斯加权评分常量与表达式已抽取到 utils/bayesian.ts（与首页各类型推荐共用）
  */
-const BAYES_MIN_SCORES = 30;
-
-/**
- * 全站加权均分 C（WR 公式的先验）：非 draft 番剧按评分人数加权的均分。
- * 无关联子查询，PG 会走 InitPlan 只算一次
- */
-const globalMeanScore = sql`(
-  select coalesce(sum(score_count * avg_score) / nullif(sum(score_count), 0), 0)
-  from ${animeTable}
-  where ${animeTable.status} <> 'draft'
-)`;
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -478,12 +467,7 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
 
       const orderBy = {
         score: [
-          desc(sql`(
-            (${animeTable.scoreCount}::numeric / (${animeTable.scoreCount} + ${BAYES_MIN_SCORES})) *
-              ${animeTable.avgScore}
-            + (${BAYES_MIN_SCORES}::numeric / (${animeTable.scoreCount} + ${BAYES_MIN_SCORES})) *
-              ${globalMeanScore}
-          )`),
+          desc(bayesianWeightedScore),
           // WR 平票（含未评分番剧 WR = C）时，有评分的排在未评分前
           desc(animeTable.scoreCount),
           asc(animeTable.id)
