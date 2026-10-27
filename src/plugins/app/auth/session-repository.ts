@@ -109,12 +109,33 @@ const createSessionRepository = (fastify: FastifyInstance) => {
      * @param token 会话Token
      */
     async getSession(token: string): Promise<SessionData | null> {
+      return (await this.getSessionWithTtl(token))?.session ?? null;
+    },
+
+    /**
+     * 获取 session 及其剩余 TTL（单次 Redis 往返）
+     *
+     * 认证中间件每请求都需要“会话数据 + 是否该续签”两项信息，
+     * 合并在一个 pipeline 里，省掉第二次往返。
+     * 会话不存在时返回 null；存在时 ttl 为剩余秒数（可能 ≤ 0，表示已过期待清理）。
+     */
+    async getSessionWithTtl(
+      token: string
+    ): Promise<{ session: SessionData; ttl: number } | null> {
       if (!this.isValidToken(token)) return null;
 
       const key = this.buildKey(this.hashToken(token));
-      const data = await redis.get(key);
+      const pipeline = redis.pipeline();
+      pipeline.get(key);
+      pipeline.ttl(key);
+      const results = await pipeline.exec();
+      if (!results) return null;
+      const [[, data], [, ttl]] = results;
       if (!data) return null;
-      return JSON.parse(data) as SessionData;
+      return {
+        session: JSON.parse(data as string) as SessionData,
+        ttl: ttl as number
+      };
     },
 
     /**
@@ -139,18 +160,6 @@ const createSessionRepository = (fastify: FastifyInstance) => {
       pipeline.zadd(userIndexKey, newExpiresAt, this.hashToken(token));
       pipeline.zremrangebyscore(userIndexKey, '-inf', now);
       await pipeline.exec();
-    },
-
-    /**
-     * 检查是否需要续签
-     * @param token 会话Token
-     */
-    async shouldRenew(token: string): Promise<boolean> {
-      const ttl = await redis.ttl(this.buildKey(this.hashToken(token)));
-      if (ttl <= 0) return false;
-
-      const thresholdSeconds = config.SESSION_RENEW_THRESHOLD / 1000;
-      return ttl < thresholdSeconds;
     },
 
     /**

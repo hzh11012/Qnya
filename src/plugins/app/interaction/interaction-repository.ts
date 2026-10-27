@@ -15,6 +15,7 @@ import {
   ClientRatingCreate
 } from '../../../schemas/play.js';
 import { buildSeasonSuffix } from '../../../utils/season.js';
+import { syncAnimeScore } from '../scores/sync-anime-score.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -30,17 +31,6 @@ declare module 'fastify' {
 const createInteractionRepository = (fastify: FastifyInstance) => {
   const db = fastify.db;
   const { batchStats } = fastify.videosRepository;
-
-  /** 重建番剧的平均评分与评分人数（只统计已审核，评分提交后调用） */
-  const syncAnimeScore = async (animeId: string) => {
-    await db
-      .update(animeTable)
-      .set({
-        avgScore: sql`(select coalesce(avg(${scoresTable.score}), 0) from ${scoresTable} where ${scoresTable.animeId} = ${animeId} and ${scoresTable.status})`,
-        scoreCount: sql`(select count(*) from ${scoresTable} where ${scoresTable.animeId} = ${animeId} and ${scoresTable.status})`
-      })
-      .where(eq(animeTable.id, animeId));
-  };
 
   return {
     /** 弹幕列表（按出现时间排序） */
@@ -158,15 +148,18 @@ const createInteractionRepository = (fastify: FastifyInstance) => {
       userId: string,
       data: ClientRatingCreate
     ) {
-      await db
-        .insert(scoresTable)
-        .values({ animeId, userId, score: data.score, content: data.content })
-        .onConflictDoUpdate({
-          target: [scoresTable.userId, scoresTable.animeId],
-          set: { score: data.score, content: data.content }
-        });
+      // 评分写入与统计重算同事务（硬性约定 #6）
+      await db.transaction(async tx => {
+        await tx
+          .insert(scoresTable)
+          .values({ animeId, userId, score: data.score, content: data.content })
+          .onConflictDoUpdate({
+            target: [scoresTable.userId, scoresTable.animeId],
+            set: { score: data.score, content: data.content }
+          });
 
-      await syncAnimeScore(animeId);
+        await syncAnimeScore(tx, animeId);
+      });
     },
 
     /** 我的追番分页（附带每部番第一集 videoId，用于跳转播放） */

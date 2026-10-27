@@ -10,6 +10,7 @@ import { calcOffset, buildOrderBy } from '../../../utils/paginated-query.js';
 import { escapeLike } from '../../../utils/like.js';
 import { t2s } from '../../../utils/t2s.js';
 import { invalidateDashboardCache } from '../dashboard/dashboard-repository.js';
+import { syncAnimeScore } from './sync-anime-score.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -19,17 +20,6 @@ declare module 'fastify' {
 
 const createScoresRepository = (fastify: FastifyInstance) => {
   const db = fastify.db;
-
-  /** 重算番剧的平均评分与评分人数（只统计已审核） */
-  const syncAnimeScore = async (animeId: string) => {
-    await db
-      .update(animeTable)
-      .set({
-        avgScore: sql`(select coalesce(avg(${scoresTable.score}), 0) from ${scoresTable} where ${scoresTable.animeId} = ${animeId} and ${scoresTable.status})`,
-        scoreCount: sql`(select count(*) from ${scoresTable} where ${scoresTable.animeId} = ${animeId} and ${scoresTable.status})`
-      })
-      .where(eq(animeTable.id, animeId));
-  };
 
   return {
     /** 查询评分列表 */
@@ -106,30 +96,40 @@ const createScoresRepository = (fastify: FastifyInstance) => {
 
     /** 更新评分（字段已由 Zod Schema 白名单过滤） */
     async update(id: string, data: UpdateScoreBody) {
-      const [updated] = await db
-        .update(scoresTable)
-        .set(data)
-        .where(eq(scoresTable.id, id))
-        .returning();
+      // 评分写入与统计重算同事务（硬性约定 #6）
+      const updated = await db.transaction(async tx => {
+        const [row] = await tx
+          .update(scoresTable)
+          .set(data)
+          .where(eq(scoresTable.id, id))
+          .returning();
+        if (!row) return null;
+        await syncAnimeScore(tx, row.animeId);
+        return row;
+      });
       if (updated) {
-        await syncAnimeScore(updated.animeId);
         // 审核状态变更后立即失效概览统计缓存，避免“待审核”陈旧显示
         await invalidateDashboardCache(fastify.redis);
       }
-      return updated ?? null;
+      return updated;
     },
 
     /** 删除评分 */
     async deleteById(id: string) {
-      const [deleted] = await db
-        .delete(scoresTable)
-        .where(eq(scoresTable.id, id))
-        .returning();
+      // 删除与统计重算同事务（硬性约定 #6）
+      const deleted = await db.transaction(async tx => {
+        const [row] = await tx
+          .delete(scoresTable)
+          .where(eq(scoresTable.id, id))
+          .returning();
+        if (!row) return null;
+        await syncAnimeScore(tx, row.animeId);
+        return row;
+      });
       if (deleted) {
-        await syncAnimeScore(deleted.animeId);
         await invalidateDashboardCache(fastify.redis);
       }
-      return deleted ?? null;
+      return deleted;
     }
   };
 };

@@ -99,8 +99,15 @@ export default async function (fastify: FastifyInstance) {
       };
 
       const [detailRes, creditsRes] = await Promise.all([
-        fetch(detailUrl.toString(), { headers }),
-        fetch(creditsUrl.toString(), { headers })
+        // 与 search 接口一致：外呼必须限死 10s，防止 TMDB 无响应时请求悬挂
+        fetch(detailUrl.toString(), {
+          signal: AbortSignal.timeout(10_000),
+          headers
+        }),
+        fetch(creditsUrl.toString(), {
+          signal: AbortSignal.timeout(10_000),
+          headers
+        })
       ]);
 
       if (!detailRes.ok) {

@@ -44,7 +44,9 @@ const createAuthMiddleware = (fastify: FastifyInstance) => {
       return reply.unauthorized('未登录');
     }
 
-    const session = await sessionRepository.getSession(sessionToken);
+    // 单次 Redis 往返取回会话与剩余 TTL（续签判断用）
+    const { session, ttl } =
+      (await sessionRepository.getSessionWithTtl(sessionToken)) ?? {};
 
     if (!session) {
       reply.clearCookie('session', { path: '/' });
@@ -56,8 +58,9 @@ const createAuthMiddleware = (fastify: FastifyInstance) => {
       return reply.forbidden('账号已停用');
     }
 
-    // 自动续签
-    if (await sessionRepository.shouldRenew(sessionToken)) {
+    // 自动续签（ttl 已随会话一并取回，不再单独查询）
+    const thresholdSeconds = fastify.config.SESSION_RENEW_THRESHOLD / 1000;
+    if (ttl !== undefined && ttl > 0 && ttl < thresholdSeconds) {
       await sessionRepository.renewSession(sessionToken, session);
       const cookieOptions = sessionRepository.getCookieOptions();
       reply.setCookie('session', sessionToken, cookieOptions);
