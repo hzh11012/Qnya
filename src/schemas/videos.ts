@@ -13,8 +13,8 @@ export const VideoListSchema = z.preprocess(
 
 export type VideoListQuery = z.infer<typeof VideoListSchema>;
 
-/** 集数编号：正数且限定 0.5 的整数倍（SP/总集篇用 6.5、12.5 这类小数占位） */
-const EpisodeSchema = z.coerce.number().positive().multipleOf(0.5);
+/** 集数编号：非负且限定 0.5 的整数倍（SP/总集篇用 6.5、12.5 这类小数占位，第 0 话为先导集） */
+const EpisodeSchema = z.coerce.number().min(0).multipleOf(0.5);
 
 export const AddVideoSchema = z.object({
   animeId: IdSchema,
