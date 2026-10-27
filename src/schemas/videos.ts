@@ -13,10 +13,13 @@ export const VideoListSchema = z.preprocess(
 
 export type VideoListQuery = z.infer<typeof VideoListSchema>;
 
+/** 集数编号：正数且限定 0.5 的整数倍（SP/总集篇用 6.5、12.5 这类小数占位） */
+const EpisodeSchema = z.coerce.number().positive().multipleOf(0.5);
+
 export const AddVideoSchema = z.object({
   animeId: IdSchema,
   title: z.string().min(1).max(100),
-  episode: z.coerce.number().positive(),
+  episode: EpisodeSchema,
   url: z.string().min(1).max(255)
 });
 
@@ -31,7 +34,7 @@ export type UpdateVideoParams = z.infer<typeof UpdateVideoParamsSchema>;
 export const UpdateVideoBodySchema = z.object({
   animeId: IdSchema.optional(),
   title: z.string().min(1).max(100).optional(),
-  episode: z.coerce.number().positive().optional(),
+  episode: EpisodeSchema.optional(),
   url: z.string().min(1).max(255).optional()
 });
 
