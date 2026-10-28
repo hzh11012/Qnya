@@ -16,7 +16,10 @@ const TOOLS = [
     description: '获取站点概览（番剧数、下载数、用户数等）'
   },
   { name: 'search_tmdb', description: '按关键词搜索番剧或电影，返回候选列表' },
-  { name: 'get_tmdb_detail', description: '获取 TMDB 详情，TV 支持按季查询' },
+  {
+    name: 'get_tmdb_detail',
+    description: '获取 TMDB 详情，TV 支持按季查询（含剧集列表）'
+  },
   {
     name: 'list_anime',
     description: '查询番剧列表，支持关键词/状态/类型/年份/季度/标签筛选'
@@ -37,8 +40,19 @@ const TOOLS = [
     description: '为已入库番剧添加剧集（播放记录），支持 SP 小数集数'
   },
   {
+    name: 'list_videos',
+    description: '查看番剧的剧集列表（含编号、标题、播放地址）'
+  },
+  { name: 'update_video', description: '修改剧集的标题/集数编号/播放地址' },
+  { name: 'delete_video', description: '删除剧集记录（需用户确认）' },
+  {
     name: 'create_topic',
     description: '创建专题推荐页并收录番剧，默认草稿'
+  },
+  { name: 'list_topics', description: '查询专题列表（含收录番剧）' },
+  {
+    name: 'update_topic',
+    description: '修改专题字段或整体替换收录的番剧列表'
   },
   { name: 'add_torrent', description: '向 qBittorrent 添加磁力链接或种子 URL' },
   { name: 'list_torrents', description: '查看 qBittorrent 下载列表和进度' },

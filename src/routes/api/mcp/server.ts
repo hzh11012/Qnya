@@ -12,6 +12,11 @@ import { registerCreateAnime } from './tools/create-anime.js';
 import { registerUpdateAnime } from './tools/update-anime.js';
 import { registerCreateVideo } from './tools/create-video.js';
 import { registerCreateTopic } from './tools/create-topic.js';
+import { registerListVideos } from './tools/list-videos.js';
+import { registerUpdateVideo } from './tools/update-video.js';
+import { registerDeleteVideo } from './tools/delete-video.js';
+import { registerListTopics } from './tools/list-topics.js';
+import { registerUpdateTopic } from './tools/update-topic.js';
 import { registerGetSiteStats } from './tools/get-site-stats.js';
 import { registerGetAnime } from './tools/get-anime.js';
 import { registerAddTorrent } from './tools/add-torrent.js';
@@ -58,8 +63,13 @@ export function createMcpServer(fastify: FastifyInstance): McpServer {
   registerUpdateAnime(server, fastify);
 
   // 剧集与专题
+  registerListVideos(server, fastify);
   registerCreateVideo(server, fastify);
+  registerUpdateVideo(server, fastify);
+  registerDeleteVideo(server, fastify);
+  registerListTopics(server, fastify);
   registerCreateTopic(server, fastify);
+  registerUpdateTopic(server, fastify);
 
   // 下载管理
   registerAddTorrent(server, fastify);

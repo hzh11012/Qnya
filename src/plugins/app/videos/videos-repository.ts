@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 import { videosTable, animeTable } from '../../../db/index.js';
-import { and, eq, inArray, like, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, like, sql } from 'drizzle-orm';
 import type {
   VideoListQuery,
   AddVideoBody,
@@ -141,6 +141,22 @@ const createVideosRepository = (fastify: FastifyInstance) => {
         )
         .limit(1);
       return video ?? null;
+    },
+
+    /** 查找番剧下的全部视频（按集数升序，供 MCP list_videos 使用） */
+    async findAllByAnimeId(animeId: string) {
+      return db
+        .select({
+          id: videosTable.id,
+          title: videosTable.title,
+          episode: videosTable.episode,
+          url: videosTable.url,
+          views: videosTable.views,
+          createdAt: videosTable.createdAt
+        })
+        .from(videosTable)
+        .where(eq(videosTable.animeId, animeId))
+        .orderBy(asc(videosTable.episode));
     },
 
     /** 创建视频 */

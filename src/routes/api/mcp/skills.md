@@ -4,7 +4,7 @@
 
 ---
 
-## 工具速查（15 个）
+## 工具速查（20 个）
 
 ### 概览
 
@@ -14,10 +14,10 @@
 
 ### TMDB
 
-| 工具              | 用途                                                                  |
-| ----------------- | --------------------------------------------------------------------- |
-| `search_tmdb`     | 按关键词搜索番剧或电影，返回候选列表（含 tmdbId、mediaType）          |
-| `get_tmdb_detail` | 获取 TMDB 详情。TV 不传 season 返回季列表；传 season 返回该季完整字段 |
+| 工具              | 用途                                                                                                 |
+| ----------------- | ---------------------------------------------------------------------------------------------------- |
+| `search_tmdb`     | 按关键词搜索番剧或电影，返回候选列表（含 tmdbId、mediaType）                                         |
+| `get_tmdb_detail` | 获取 TMDB 详情。TV 不传 season 返回季列表；传 season 返回该季完整字段及剧集列表（season 0 为特别篇） |
 
 ### 番剧管理
 
@@ -32,10 +32,15 @@
 
 ### 剧集与专题
 
-| 工具           | 用途                                                                      |
-| -------------- | ------------------------------------------------------------------------- |
-| `create_video` | 为已入库番剧添加剧集（播放记录），episode 为 0.5 网格（支持 SP 小数集数） |
-| `create_topic` | 创建专题推荐页并收录番剧，默认草稿（status=true 发布）                    |
+| 工具           | 用途                                                                        |
+| -------------- | --------------------------------------------------------------------------- |
+| `list_videos`  | 查看番剧的剧集列表（含 id、标题、编号、播放地址），补集/修集前必查          |
+| `create_video` | 为已入库番剧添加剧集（播放记录），episode 为 0.5 网格（支持 SP 小数集数）   |
+| `update_video` | 修改剧集的标题/集数编号/播放地址，只传需要修改的字段                        |
+| `delete_video` | 删除剧集记录，必须用户确认后携带 confirm: true                              |
+| `list_topics`  | 查询专题列表（含收录番剧），建专题前查重名，编辑前获取 id 和现状            |
+| `create_topic` | 创建专题推荐页并收录番剧，默认草稿（status=true 发布）                      |
+| `update_topic` | 修改专题字段或整体替换收录番剧（animeIds 为全量替换，追加需先合并现有列表） |
 
 ### 下载管理
 
@@ -94,21 +99,35 @@
    ['pending'])
 ```
 
-### 工作流五：为番剧补充剧集
+### 工作流五：为番剧补充/修正剧集
 
 ```
 1. list_anime(keyword)     找到番剧，获取 id
-2. create_video            逐集添加播放记录
+2. list_videos(id)         查看已有剧集，确定缺哪些
+3. create_video            逐集添加播放记录：正片整数，SP/总集篇 0.5 网格小数（6.5、12.5）
+4. update_video            （修正）填错标题/编号/地址时使用，id 来自 list_videos
+5. delete_video            （下架）必须先向用户确认，再携带 confirm: true 调用
 → 注意：文件实体入库（tasks 入库）仍需用户在管理后台手动完成，
   create_video 只负责创建播放记录（url 从用户提供的地址填入）
 ```
 
-### 工作流六：创建专题推荐
+### 工作流六：创建/维护专题推荐
 
 ```
-1. list_anime(...)         按主题筛选番剧，收集 id 列表（如某季度全部新番）
-2. create_topic            填入名称/简介/封面，animeIds 传入收集的 id
-→ 默认创建为草稿，用户在管理后台预览确认后发布，或创建时直接传 status=true
+1. list_topics(...)        查看现有专题，查重名（也可按 keyword/status 筛选）
+2. list_anime(...)         按主题筛选番剧，收集 id 列表（如某季度全部新番）
+3. create_topic            填入名称/简介/封面，animeIds 传入收集的 id，默认草稿
+4. update_topic            （维护）追加番剧时先从 list_topics 取现有列表合并后整体替换；
+                           预览确认后传 status: true 发布
+```
+
+### 工作流七：对照 TMDB 剧集列表补集
+
+```
+1. get_tmdb_detail(season) 拉取该季 episodes 列表（编号/标题/播出日期/类型）
+2. get_tmdb_detail(season: 0)（可选）拉取特别篇列表，按播出日期插到正片之间映射为 6.5、12.5
+3. list_videos(id)         对账：找出 TMDB 有而站内缺的集数
+4. create_video            逐集补齐
 ```
 
 ---
@@ -117,9 +136,9 @@
 
 ### 入库前必须
 
-- **查重**：`create_anime` 前必须调用 `list_anime` 确认番剧不存在
+- **查重**：`create_anime` 前必须调用 `list_anime` 确认番剧不存在；`create_topic` / `update_topic` 改名前用 `list_topics` 查重名
 - **获取标签**：`create_anime` 前必须调用 `list_tags`，`tagIds` 只能来自此工具的返回值，不能凭空填写
-- **剧集编号规范**：`create_video` 的 episode 为非负且 0.5 的整数倍；正片整数，SP/总集篇小数（6.5、12.5），0 为先导集；同番剧重复集数会被拦截
+- **剧集编号规范**：`create_video` / `update_video` 的 episode 为非负且 0.5 的整数倍；正片整数，SP/总集篇小数（6.5、12.5），0 为先导集；同番剧重复集数会被拦截
 
 ### TV 番剧详情获取
 
@@ -134,13 +153,18 @@
 | `get_anime` 的 `id`          | `list_anime` 返回的 `id` 字段      |
 | `create_anime` 的 `tagIds`   | `list_tags` 返回的 `id` 字段       |
 | `create_video` 的 `animeId`  | `list_anime` 返回的 `id` 字段      |
+| `update_video` 的 `id`       | `list_videos` 返回的 `id` 字段     |
+| `delete_video` 的 `id`       | `list_videos` 返回的 `id` 字段     |
 | `create_topic` 的 `animeIds` | `list_anime` 返回的 `id` 字段      |
+| `update_topic` 的 `id`       | `list_topics` 返回的 `id` 字段     |
 | `add_torrent` 后的 hash      | `add_torrent` 返回的 `torrentHash` |
 
 ### 不允许的操作
 
 - 不操作文件系统（文件入库由用户在管理后台手动完成）
 - 不删除番剧或系列（无对应工具，需用户在管理后台操作）
+- 删除剧集（`delete_video`）属于危险操作：必须先向用户确认，征得同意后携带 `confirm: true` 调用
+- `update_topic` 的 `animeIds` 是整体替换：追加前必须先从 `list_topics` 取现状合并，禁止凭空猜测导致误删收录
 - 不修改用户数据、弹幕、评分等内容（超出 MCP 授权范围）
 - **不自行选择资源**：`search_resources` 结果必须完整展示给用户，等用户确认后才能调用 `add_torrent`
 
@@ -155,6 +179,8 @@
 **month**（季度）：`january`（1月番）| `april`（4月番）| `july`（7月番）| `october`（10月番）
 
 **episode**（剧集编号）：非负、0.5 的整数倍；正片整数，SP/总集篇小数（6.5、12.5），0 为先导集
+
+**episode_type**（TMDB 剧集类型）：`standard`（正片）| `special`（特别篇）| `recap`（回顾）等，用于判断编号映射
 
 **下载状态筛选**：`downloading` | `stalledDL` | `pausedDL` | `uploading` | `error`
 

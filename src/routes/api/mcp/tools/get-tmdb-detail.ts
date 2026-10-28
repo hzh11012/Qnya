@@ -15,7 +15,7 @@ export function registerGetTmdbDetail(
       description:
         '获取 TMDB 动漫或电影详情。' +
         '【TV 不传 season】返回系列基础信息和 seasons 列表，用于了解共有几季及各季编号；' +
-        '【TV 传 season】返回该季专属数据（名称、简介、封面、首播日期、导演、声优），用于入库前填充字段。' +
+        '【TV 传 season】返回该季专属数据（名称、简介、封面、首播日期、导演、声优）及 episodes 剧集列表（编号/标题/播出日期/类型），可用于规划 create_video 的集数。特别篇通常在 season 0。' +
         '推荐工作流：先不传 season 获取季列表，再按需逐季传 season 获取详情，最后调用 create_anime 入库。',
       inputSchema: {
         tmdbId: z.number().describe('TMDB ID'),
@@ -24,7 +24,7 @@ export function registerGetTmdbDetail(
           .number()
           .optional()
           .describe(
-            '季编号（仅 TV 有效）。不传时返回系列信息和季列表；传入时返回该季专属详情'
+            '季编号（仅 TV 有效，0 为特别篇合集）。不传时返回系列信息和季列表；传入时返回该季专属详情及剧集列表'
           ),
         language: z.string().optional().default('zh-CN').describe('语言代码')
       }
@@ -222,7 +222,14 @@ export function registerGetTmdbDetail(
                   : new Date().getFullYear(),
                 month: mapMonth(airDate),
                 director,
-                cv
+                cv,
+                episodes: (seasonDetail?.episodes ?? []).map((e: any) => ({
+                  episode_number: e.episode_number,
+                  name: e.name ?? '',
+                  air_date: e.air_date ?? null,
+                  episode_type: e.episode_type ?? null,
+                  runtime: e.runtime ?? null
+                }))
               },
               null,
               2
