@@ -4,7 +4,7 @@
 
 ---
 
-## 工具速查（13 个）
+## 工具速查（15 个）
 
 ### 概览
 
@@ -30,6 +30,13 @@
 | `create_anime` | 将番剧入库，系列不存在时自动创建                                  |
 | `update_anime` | 修改已入库番剧的字段，只传需要修改的字段                          |
 
+### 剧集与专题
+
+| 工具           | 用途                                                                      |
+| -------------- | ------------------------------------------------------------------------- |
+| `create_video` | 为已入库番剧添加剧集（播放记录），episode 为 0.5 网格（支持 SP 小数集数） |
+| `create_topic` | 创建专题推荐页并收录番剧，默认草稿（status=true 发布）                    |
+
 ### 下载管理
 
 | 工具               | 用途                                                                      |
@@ -53,9 +60,10 @@
                            Movie: 直接获取详情
 5. list_tags               获取所有标签，选择与题材匹配的 tagIds
 6. create_anime            填入第 4、5 步获得的字段完成入库
-7. search_resources(name)  （可选）搜索磁力资源，将结果完整展示给用户
+7. create_video            （可选）逐集添加播放记录：正片整数，SP/总集篇 0.5 网格小数
+8. search_resources(name)  （可选）搜索磁力资源，将结果完整展示给用户
                            → 等待用户从列表中选定一条
-8. add_torrent(magnet)     （可选）用用户选定的 magnet 添加下载，记录 torrentHash
+9. add_torrent(magnet)     （可选）用用户选定的 magnet 添加下载，记录 torrentHash
 ```
 
 ### 工作流二：监控下载进度
@@ -86,6 +94,23 @@
    ['pending'])
 ```
 
+### 工作流五：为番剧补充剧集
+
+```
+1. list_anime(keyword)     找到番剧，获取 id
+2. create_video            逐集添加播放记录
+→ 注意：文件实体入库（tasks 入库）仍需用户在管理后台手动完成，
+  create_video 只负责创建播放记录（url 从用户提供的地址填入）
+```
+
+### 工作流六：创建专题推荐
+
+```
+1. list_anime(...)         按主题筛选番剧，收集 id 列表（如某季度全部新番）
+2. create_topic            填入名称/简介/封面，animeIds 传入收集的 id
+→ 默认创建为草稿，用户在管理后台预览确认后发布，或创建时直接传 status=true
+```
+
 ---
 
 ## 强制约束
@@ -94,6 +119,7 @@
 
 - **查重**：`create_anime` 前必须调用 `list_anime` 确认番剧不存在
 - **获取标签**：`create_anime` 前必须调用 `list_tags`，`tagIds` 只能来自此工具的返回值，不能凭空填写
+- **剧集编号规范**：`create_video` 的 episode 为非负且 0.5 的整数倍；正片整数，SP/总集篇小数（6.5、12.5），0 为先导集；同番剧重复集数会被拦截
 
 ### TV 番剧详情获取
 
@@ -102,12 +128,14 @@
 
 ### ID 来源规则
 
-| 字段                       | 必须来自                           |
-| -------------------------- | ---------------------------------- |
-| `update_anime` 的 `id`     | `list_anime` 返回的 `id` 字段      |
-| `get_anime` 的 `id`        | `list_anime` 返回的 `id` 字段      |
-| `create_anime` 的 `tagIds` | `list_tags` 返回的 `id` 字段       |
-| `add_torrent` 后的 hash    | `add_torrent` 返回的 `torrentHash` |
+| 字段                         | 必须来自                           |
+| ---------------------------- | ---------------------------------- |
+| `update_anime` 的 `id`       | `list_anime` 返回的 `id` 字段      |
+| `get_anime` 的 `id`          | `list_anime` 返回的 `id` 字段      |
+| `create_anime` 的 `tagIds`   | `list_tags` 返回的 `id` 字段       |
+| `create_video` 的 `animeId`  | `list_anime` 返回的 `id` 字段      |
+| `create_topic` 的 `animeIds` | `list_anime` 返回的 `id` 字段      |
+| `add_torrent` 后的 hash      | `add_torrent` 返回的 `torrentHash` |
 
 ### 不允许的操作
 
@@ -125,6 +153,8 @@
 **type**：`movie` | `japanese` | `american` | `chinese` | `adult`
 
 **month**（季度）：`january`（1月番）| `april`（4月番）| `july`（7月番）| `october`（10月番）
+
+**episode**（剧集编号）：非负、0.5 的整数倍；正片整数，SP/总集篇小数（6.5、12.5），0 为先导集
 
 **下载状态筛选**：`downloading` | `stalledDL` | `pausedDL` | `uploading` | `error`
 

@@ -32,6 +32,14 @@ const TOOLS = [
     name: 'update_anime',
     description: '修改已入库番剧的字段，只传需要修改的字段'
   },
+  {
+    name: 'create_video',
+    description: '为已入库番剧添加剧集（播放记录），支持 SP 小数集数'
+  },
+  {
+    name: 'create_topic',
+    description: '创建专题推荐页并收录番剧，默认草稿'
+  },
   { name: 'add_torrent', description: '向 qBittorrent 添加磁力链接或种子 URL' },
   { name: 'list_torrents', description: '查看 qBittorrent 下载列表和进度' },
   { name: 'list_tasks', description: '查看下载完成后待入库的文件任务' },
