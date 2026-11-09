@@ -1,5 +1,6 @@
 export * from './relations.js';
 export * from './anime/index.js';
+export * from './app-releases/index.js';
 export * from './collections/index.js';
 export * from './danmaku/index.js';
 export * from './feedback/index.js';
