@@ -700,6 +700,15 @@
           },
           {
             "schema": {
+              "type": "string",
+              "enum": ["android", "windows", "ios", "macos"]
+            },
+            "in": "query",
+            "name": "platform",
+            "required": false
+          },
+          {
+            "schema": {
               "default": "createdAt",
               "type": "string",
               "enum": ["createdAt"]
@@ -756,14 +765,15 @@
                               "versionName": {
                                 "type": "string"
                               },
+                              "platform": {
+                                "type": "string",
+                                "enum": ["android", "windows", "ios", "macos"]
+                              },
                               "url": {
                                 "type": "string"
                               },
                               "changelog": {
                                 "type": "string"
-                              },
-                              "force": {
-                                "type": "boolean"
                               },
                               "createdAt": {
                                 "type": "string",
@@ -774,9 +784,9 @@
                               "id",
                               "versionCode",
                               "versionName",
+                              "platform",
                               "url",
                               "changelog",
-                              "force",
                               "createdAt"
                             ],
                             "additionalProperties": false
@@ -813,6 +823,11 @@
                     "minLength": 1,
                     "maxLength": 32
                   },
+                  "platform": {
+                    "default": "android",
+                    "type": "string",
+                    "enum": ["android", "windows", "ios", "macos"]
+                  },
                   "url": {
                     "type": "string",
                     "minLength": 1,
@@ -822,10 +837,6 @@
                     "default": "",
                     "type": "string",
                     "maxLength": 2000
-                  },
-                  "force": {
-                    "default": false,
-                    "type": "boolean"
                   }
                 },
                 "required": ["versionName", "url"]
@@ -859,6 +870,75 @@
       }
     },
     "/api/admin/app-releases/{id}": {
+      "put": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "versionName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32
+                  },
+                  "platform": {
+                    "type": "string",
+                    "enum": ["android", "windows", "ios", "macos"]
+                  },
+                  "url": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "changelog": {
+                    "default": "",
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                },
+                "required": ["versionName", "platform", "url"]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number",
+                      "enum": [200]
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "parameters": [
           {
@@ -4847,6 +4927,18 @@
     },
     "/api/app/latest": {
       "get": {
+        "parameters": [
+          {
+            "schema": {
+              "default": "android",
+              "type": "string",
+              "enum": ["android", "windows", "ios", "macos"]
+            },
+            "in": "query",
+            "name": "platform",
+            "required": false
+          }
+        ],
         "responses": {
           "200": {
             "description": "Default Response",
@@ -4883,17 +4975,13 @@
                         "changelog": {
                           "type": "string",
                           "maxLength": 2000
-                        },
-                        "force": {
-                          "type": "boolean"
                         }
                       },
                       "required": [
                         "versionCode",
                         "versionName",
                         "url",
-                        "changelog",
-                        "force"
+                        "changelog"
                       ],
                       "additionalProperties": false
                     }
@@ -6442,6 +6530,35 @@
                           "type": "string",
                           "enum": ["upcoming", "airing", "completed"]
                         },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "movie",
+                            "japanese",
+                            "american",
+                            "chinese",
+                            "adult"
+                          ]
+                        },
+                        "year": {
+                          "type": "number"
+                        },
+                        "month": {
+                          "type": "string",
+                          "enum": ["january", "april", "july", "october"]
+                        },
+                        "director": {
+                          "type": "string"
+                        },
+                        "cv": {
+                          "type": "string"
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "avgScore": {
                           "type": "number"
                         },
@@ -6664,6 +6781,12 @@
                         "description",
                         "cover",
                         "status",
+                        "type",
+                        "year",
+                        "month",
+                        "director",
+                        "cv",
+                        "tags",
                         "avgScore",
                         "scoreCount",
                         "playCount",

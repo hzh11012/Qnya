@@ -1,0 +1,1 @@
+ALTER TABLE "app_releases" DROP COLUMN "force";

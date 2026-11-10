@@ -120,6 +120,20 @@
       "when": 1794066515109,
       "tag": "0016_fixed_stepford_cuckoos",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794328201079,
+      "tag": "0017_cooing_yellow_claw",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794338038310,
+      "tag": "0018_wide_maximus",
+      "breakpoints": true
     }
   ]
 }

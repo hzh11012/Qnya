@@ -4,7 +4,9 @@ import { desc, eq, sql } from 'drizzle-orm';
 import { appReleasesTable } from '../../../db/index.js';
 import type {
   AppReleaseListQuery,
-  CreateAppReleaseBody
+  AppPlatform,
+  CreateAppReleaseBody,
+  UpdateAppReleaseBody
 } from '../../../schemas/app.js';
 import { calcOffset, buildOrderBy } from '../../../utils/paginated-query.js';
 
@@ -18,35 +20,42 @@ const createAppReleaseRepository = (fastify: FastifyInstance) => {
   const db = fastify.db;
 
   return {
-    /** 客户端 — 最新版本（versionCode 最大的一条，无发布记录返回 null） */
-    async findLatest() {
+    /** 客户端 — 指定平台的最新版本（versionCode 最大的一条，无发布记录返回 null） */
+    async findLatest(platform: AppPlatform) {
       const [release] = await db
         .select({
           versionCode: appReleasesTable.versionCode,
           versionName: appReleasesTable.versionName,
           url: appReleasesTable.url,
-          changelog: appReleasesTable.changelog,
-          force: appReleasesTable.force
+          changelog: appReleasesTable.changelog
         })
         .from(appReleasesTable)
+        .where(eq(appReleasesTable.platform, platform))
         .orderBy(desc(appReleasesTable.versionCode))
         .limit(1);
       return release ?? null;
     },
 
-    /** 后台 — 版本发布列表（分页，默认 createdAt 降序） */
+    /** 后台 — 版本发布列表（分页，可按平台筛选，默认 createdAt 降序） */
     async findAll(params: AppReleaseListQuery) {
-      const { page, pageSize, sort, order } = params;
+      const { page, pageSize, sort, order, platform } = params;
       const sortColumn = appReleasesTable[sort];
+      const where = platform
+        ? eq(appReleasesTable.platform, platform)
+        : undefined;
 
       const [items, countResult] = await Promise.all([
         db
           .select()
           .from(appReleasesTable)
+          .where(where)
           .orderBy(...buildOrderBy(sortColumn, order, appReleasesTable.id))
           .limit(pageSize)
           .offset(calcOffset(page, pageSize)),
-        db.select({ count: sql<number>`count(*)` }).from(appReleasesTable)
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(appReleasesTable)
+          .where(where)
       ]);
 
       return {
@@ -69,6 +78,16 @@ const createAppReleaseRepository = (fastify: FastifyInstance) => {
         })
         .returning();
       return created ?? null;
+    },
+
+    /** 后台 — 修改版本发布记录 */
+    async updateById(id: string, data: UpdateAppReleaseBody) {
+      const [updated] = await db
+        .update(appReleasesTable)
+        .set(data)
+        .where(eq(appReleasesTable.id, id))
+        .returning();
+      return updated ?? null;
     },
 
     /** 后台 — 删除版本发布记录 */

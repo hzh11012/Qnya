@@ -3,10 +3,12 @@ import fp from 'fastify-plugin';
 import { and, asc, desc, eq, inArray, ne, notInArray, sql } from 'drizzle-orm';
 import {
   animeTable,
+  animeToTagsTable,
   collectionsTable,
   historiesTable,
   scoresTable,
   seriesTable,
+  tagsTable,
   videosTable,
   type AnimeType
 } from '../../../db/index.js';
@@ -135,7 +137,8 @@ const createPlayRepository = (fastify: FastifyInstance) => {
         collection,
         score,
         seriesRows,
-        recommendRows
+        recommendRows,
+        tagRows
       ] = await Promise.all([
         db
           .select({
@@ -211,7 +214,13 @@ const createPlayRepository = (fastify: FastifyInstance) => {
             desc(animeTable.avgScore),
             asc(animeTable.id)
           )
-          .limit(10)
+          .limit(10),
+        // 风格标签
+        db
+          .select({ name: tagsTable.name })
+          .from(animeToTagsTable)
+          .innerJoin(tagsTable, eq(animeToTagsTable.tagId, tagsTable.id))
+          .where(eq(animeToTagsTable.animeId, anime.id))
       ]);
 
       // 三组 stats 互不依赖，并行执行（attachStats 内部各 2 个查询，共 1 轮往返）
@@ -235,6 +244,12 @@ const createPlayRepository = (fastify: FastifyInstance) => {
         description: anime.description,
         cover: anime.cover,
         status: anime.status as 'upcoming' | 'airing' | 'completed',
+        type: anime.type,
+        year: anime.year,
+        month: anime.month,
+        director: anime.director,
+        cv: anime.cv,
+        tags: tagRows.map(t => t.name),
         avgScore: anime.avgScore,
         scoreCount: anime.scoreCount,
         playCount: animeStats?.playCount ?? 0,
