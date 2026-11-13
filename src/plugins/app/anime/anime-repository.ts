@@ -64,6 +64,7 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
     description: string;
     remark: string;
     cover: string;
+    banner: string;
     status: string;
     type: string;
     director: string;
@@ -83,6 +84,7 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
     description: animeTable.description,
     remark: animeTable.remark,
     cover: animeTable.cover,
+    banner: animeTable.banner,
     status: animeTable.status,
     type: animeTable.type,
     director: animeTable.director,

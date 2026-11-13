@@ -5393,6 +5393,9 @@
                               "cover": {
                                 "type": "string"
                               },
+                              "banner": {
+                                "type": "string"
+                              },
                               "status": {
                                 "type": "string"
                               },
@@ -5457,6 +5460,7 @@
                               "description",
                               "remark",
                               "cover",
+                              "banner",
                               "status",
                               "type",
                               "director",
@@ -5606,6 +5610,9 @@
                               "cover": {
                                 "type": "string"
                               },
+                              "banner": {
+                                "type": "string"
+                              },
                               "status": {
                                 "type": "string"
                               },
@@ -5670,6 +5677,7 @@
                               "description",
                               "remark",
                               "cover",
+                              "banner",
                               "status",
                               "type",
                               "director",
@@ -7294,6 +7302,9 @@
                               "cover": {
                                 "type": "string"
                               },
+                              "banner": {
+                                "type": "string"
+                              },
                               "status": {
                                 "type": "string"
                               },
@@ -7361,6 +7372,7 @@
                               "description",
                               "remark",
                               "cover",
+                              "banner",
                               "status",
                               "type",
                               "director",
