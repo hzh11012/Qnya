@@ -29,6 +29,7 @@ const animeItemColumns = {
   banner: animeTable.banner,
   status: animeTable.status,
   avgScore: animeTable.avgScore,
+  scoreCount: animeTable.scoreCount,
   seriesId: animeTable.seriesId,
   type: animeTable.type
 };
@@ -42,6 +43,7 @@ type AnimeItemRow = {
   banner: string;
   status: 'upcoming' | 'airing' | 'completed';
   avgScore: number;
+  scoreCount: number;
   seriesId: string;
   type: AnimeType;
 };
@@ -59,6 +61,7 @@ const createPlayRepository = (fastify: FastifyInstance) => {
       videoId: string | null;
       playCount: number;
       collectionCount: number;
+      scoreCount: number;
     })[]
   > => {
     if (rows.length === 0) return [];

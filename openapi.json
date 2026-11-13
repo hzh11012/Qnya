@@ -6696,6 +6696,9 @@
                               },
                               "avgScore": {
                                 "type": "number"
+                              },
+                              "scoreCount": {
+                                "type": "number"
                               }
                             },
                             "required": [
@@ -6710,7 +6713,8 @@
                               "videoId",
                               "playCount",
                               "collectionCount",
-                              "avgScore"
+                              "avgScore",
+                              "scoreCount"
                             ],
                             "additionalProperties": false
                           }
@@ -6762,6 +6766,9 @@
                               },
                               "avgScore": {
                                 "type": "number"
+                              },
+                              "scoreCount": {
+                                "type": "number"
                               }
                             },
                             "required": [
@@ -6776,7 +6783,8 @@
                               "videoId",
                               "playCount",
                               "collectionCount",
-                              "avgScore"
+                              "avgScore",
+                              "scoreCount"
                             ],
                             "additionalProperties": false
                           }

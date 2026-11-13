@@ -25,7 +25,8 @@ export const ClientPlayAnimeItemSchema = z.object({
   videoId: IdSchema.nullable(),
   playCount: z.number(),
   collectionCount: z.number(),
-  avgScore: z.number()
+  avgScore: z.number(),
+  scoreCount: z.number()
 });
 
 export type ClientPlayAnimeItem = z.infer<typeof ClientPlayAnimeItemSchema>;
