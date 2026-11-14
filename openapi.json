@@ -7584,6 +7584,9 @@
                               "cover": {
                                 "type": "string"
                               },
+                              "remark": {
+                                "type": "string"
+                              },
                               "status": {
                                 "type": "string"
                               },
@@ -7647,6 +7650,7 @@
                               "name",
                               "description",
                               "cover",
+                              "remark",
                               "status",
                               "type",
                               "director",

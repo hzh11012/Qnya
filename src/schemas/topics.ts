@@ -114,6 +114,8 @@ export const ClientTopicDetailResponseSchema = z.object({
       name: z.string(),
       description: z.string(),
       cover: z.string(),
+      /** 简评/更新状态文案 */
+      remark: z.string(),
       status: z.string(),
       type: z.string(),
       director: z.string(),
