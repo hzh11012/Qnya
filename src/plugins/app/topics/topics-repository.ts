@@ -3,7 +3,8 @@ import fp from 'fastify-plugin';
 import {
   topicsTable,
   animeToTopicsTable,
-  animeTable
+  animeTable,
+  historiesTable
 } from '../../../db/index.js';
 import { and, asc, desc, eq, inArray, like, sql } from 'drizzle-orm';
 import type {
@@ -168,8 +169,12 @@ const createTopicsRepository = (fastify: FastifyInstance) => {
       });
     },
 
-    /** 客户端：已发布专题分页（含番剧数量） */
-    async findPublished(params: { page: number; pageSize: number }) {
+    /** 客户端：已发布专题分页（含番剧数量、前三个番剧封面、当前用户看过的番剧数） */
+    async findPublished(
+      params: { page: number; pageSize: number },
+      userId: string,
+      excludeTypes: string[] = []
+    ) {
       const { page, pageSize } = params;
       const where = eq(topicsTable.status, true);
 
@@ -198,10 +203,73 @@ const createTopicsRepository = (fastify: FastifyInstance) => {
           .where(where)
       ]);
 
+      const topicIds = topics.map(t => t.id);
+
+      // 关联番剧（按加入顺序）：提取前三个封面，并排除草稿/无权类型
+      const animeRows =
+        topicIds.length > 0
+          ? await db
+              .select({
+                topicId: animeToTopicsTable.topicId,
+                animeId: animeToTopicsTable.animeId,
+                cover: animeTable.cover,
+                status: animeTable.status,
+                type: animeTable.type
+              })
+              .from(animeToTopicsTable)
+              .innerJoin(
+                animeTable,
+                eq(animeToTopicsTable.animeId, animeTable.id)
+              )
+              .where(inArray(animeToTopicsTable.topicId, topicIds))
+              .orderBy(asc(animeToTopicsTable.createdAt))
+          : [];
+
+      const coversByTopic = new Map<string, string[]>();
+      const validAnimeIds = new Map<string, Set<string>>();
+      for (const r of animeRows) {
+        if (r.status === 'draft' || excludeTypes.includes(r.type)) continue;
+        const covers = coversByTopic.get(r.topicId) ?? [];
+        if (covers.length < 3) covers.push(r.cover);
+        coversByTopic.set(r.topicId, covers);
+        const ids = validAnimeIds.get(r.topicId) ?? new Set<string>();
+        ids.add(r.animeId);
+        validAnimeIds.set(r.topicId, ids);
+      }
+
+      // 当前用户在该专题下看过的番剧数（有观看记录即算看过，仅计有效番剧）
+      const watchedByTopic = new Map<string, number>();
+      if (topicIds.length > 0) {
+        const watchedRows = await db
+          .select({
+            topicId: animeToTopicsTable.topicId,
+            animeId: animeToTopicsTable.animeId
+          })
+          .from(animeToTopicsTable)
+          .innerJoin(
+            historiesTable,
+            and(
+              eq(historiesTable.animeId, animeToTopicsTable.animeId),
+              eq(historiesTable.userId, userId)
+            )
+          )
+          .where(inArray(animeToTopicsTable.topicId, topicIds));
+        for (const r of watchedRows) {
+          // 草稿/无权类型不计入
+          if (!validAnimeIds.get(r.topicId)?.has(r.animeId)) continue;
+          watchedByTopic.set(
+            r.topicId,
+            (watchedByTopic.get(r.topicId) ?? 0) + 1
+          );
+        }
+      }
+
       return {
         items: topics.map(t => ({
           ...t,
-          animeCount: Number(t.animeCount)
+          animeCount: Number(t.animeCount),
+          covers: coversByTopic.get(t.id) ?? [],
+          watchedCount: watchedByTopic.get(t.id) ?? 0
         })),
         total: Number(countResult[0]?.count ?? 0)
       };

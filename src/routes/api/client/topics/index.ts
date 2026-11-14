@@ -25,7 +25,11 @@ export default async function (fastify: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      const data = await topicsRepository.findPublished(request.query);
+      const data = await topicsRepository.findPublished(
+        request.query,
+        request.sessionData!.userId,
+        request.excludeTypes
+      );
       return reply.success('获取专题列表成功', data);
     }
   );

@@ -7479,6 +7479,15 @@
                               },
                               "animeCount": {
                                 "type": "number"
+                              },
+                              "covers": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "watchedCount": {
+                                "type": "number"
                               }
                             },
                             "required": [
@@ -7486,7 +7495,9 @@
                               "name",
                               "description",
                               "cover",
-                              "animeCount"
+                              "animeCount",
+                              "covers",
+                              "watchedCount"
                             ],
                             "additionalProperties": false
                           }

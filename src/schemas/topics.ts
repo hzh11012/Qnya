@@ -85,7 +85,11 @@ export const ClientTopicListResponseSchema = z.object({
       name: z.string(),
       description: z.string(),
       cover: z.string(),
-      animeCount: z.number()
+      animeCount: z.number(),
+      /** 前三个番剧封面（三联拼贴展示，不足三个则短） */
+      covers: z.array(z.string()),
+      /** 当前用户看过的番剧数 */
+      watchedCount: z.number()
     })
   ),
   total: z.number()
