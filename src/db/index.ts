@@ -12,3 +12,4 @@ export * from './topics/index.js';
 export * from './users/index.js';
 export * from './videos/index.js';
 export * from './tasks/index.js';
+export * from './watch-rooms/index.js';

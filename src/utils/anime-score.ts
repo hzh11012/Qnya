@@ -1,6 +1,6 @@
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import type * as schema from '../../../db/index.js';
-import { animeTable, scoresTable } from '../../../db/index.js';
+import type * as schema from '../db/index.js';
+import { animeTable, scoresTable } from '../db/index.js';
 import { eq, sql } from 'drizzle-orm';
 
 /** 与 `db.transaction` 回调参数（NodePgTransaction）结构兼容的最小执行器类型 */

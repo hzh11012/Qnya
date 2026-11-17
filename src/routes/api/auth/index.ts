@@ -16,6 +16,7 @@ export default async function (fastify: FastifyInstance) {
     verificationService,
     usersRepository,
     sessionRepository,
+    watchRoomService,
     httpErrors
   } = fastify;
 
@@ -121,6 +122,7 @@ export default async function (fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const sessionToken = request.sessionToken;
+      const userId = request.sessionData!.userId;
 
       if (sessionToken) {
         try {
@@ -129,6 +131,15 @@ export default async function (fastify: FastifyInstance) {
           // 登出时删除 session 失败仅记录日志，不影响登出流程
           fastify.log.warn({ error }, 'Failed to delete session');
         }
+      }
+
+      // 主动退出登录触发房间退出逻辑（房主登出即解散，
+      // 成员登出即退出；登出失败不影响登出流程）
+      try {
+        await watchRoomService.leaveRoom(userId);
+      } catch (error) {
+        // 不在房间内（ROOM_MEMBER_NOT_FOUND）属正常情况，仅记录日志
+        fastify.log.warn({ error }, 'Failed to leave watch room on logout');
       }
 
       reply.clearCookie('session', { path: '/' });

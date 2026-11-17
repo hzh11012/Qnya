@@ -16,6 +16,7 @@ export default async function (fastify: FastifyInstance) {
     rbac,
     usersRepository,
     sessionRepository,
+    watchRoomService,
     log,
     httpErrors
   } = fastify;
@@ -69,6 +70,18 @@ export default async function (fastify: FastifyInstance) {
       }
 
       await usersRepository.update(id, { name, role, status, avatar });
+
+      // 禁用账号连带处理：房主房间解散、成员退出所在房间（失败仅记录日志）
+      if (status === false) {
+        try {
+          await watchRoomService.handleUserDisabled(id);
+        } catch (error) {
+          log.error(
+            { error },
+            'Failed to clean up watch rooms for disabled user'
+          );
+        }
+      }
 
       // 同步更新 session 中的角色和状态（失败仅记录日志，不影响主流程）
       if (role !== undefined) {

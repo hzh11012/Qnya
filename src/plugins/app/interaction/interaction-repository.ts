@@ -15,7 +15,7 @@ import {
   ClientRatingCreate
 } from '../../../schemas/play.js';
 import { buildSeasonSuffix } from '../../../utils/season.js';
-import { syncAnimeScore } from '../scores/sync-anime-score.js';
+import { syncAnimeScore } from '../../../utils/anime-score.js';
 
 declare module 'fastify' {
   interface FastifyInstance {

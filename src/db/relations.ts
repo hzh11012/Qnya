@@ -12,6 +12,12 @@ import { feedbackTable } from './feedback/index.js';
 import { videosTable } from './videos/index.js';
 import { danmakuTable } from './danmaku/index.js';
 import { historiesTable } from './histories/index.js';
+import {
+  watchRoomInvitesTable,
+  watchRoomMembersTable,
+  watchRoomMessagesTable,
+  watchRoomsTable
+} from './watch-rooms/index.js';
 
 // ============================================
 // 中间表定义
@@ -201,3 +207,87 @@ export const historiesRelations = relations(historiesTable, ({ one }) => ({
     references: [videosTable.id]
   })
 }));
+
+// ============================================
+// 放映室关系定义
+//
+// 房间 1 — N 成员记录（部分唯一索引约束：一个用户同时至多一条 active）
+// 房间 1 — N 邀请凭证 / N 消息
+// 成员记录、邀请凭证、消息 均 N — 1 房间
+// 成员记录、消息 均 N — 1 用户（可选：系统通知无发送者）
+// 邀请凭证 N — 1 创建者（房主）
+// ============================================
+
+/** 放映室表关系 */
+export const watchRoomsRelations = relations(
+  watchRoomsTable,
+  ({ one, many }) => ({
+    /** 房主（N — 1：房间 → 用户，一个用户可先后创建多个房间） */
+    owner: one(usersTable, {
+      fields: [watchRoomsTable.ownerId],
+      references: [usersTable.id]
+    }),
+    /** 当前播放视频（N — 1：房间 → 视频，未选视频时为 null） */
+    currentVideo: one(videosTable, {
+      fields: [watchRoomsTable.currentVideoId],
+      references: [videosTable.id]
+    }),
+    /** 成员记录（1 — N：一个房间有多名成员） */
+    members: many(watchRoomMembersTable),
+    /** 邀请凭证（1 — N：一个房间可先后生成多个凭证） */
+    invites: many(watchRoomInvitesTable),
+    /** 消息（1 — N：聊天与系统通知） */
+    messages: many(watchRoomMessagesTable)
+  })
+);
+
+/** 放映室成员表关系 */
+export const watchRoomMembersRelations = relations(
+  watchRoomMembersTable,
+  ({ one }) => ({
+    /** 所属房间（N — 1：成员记录 → 房间） */
+    room: one(watchRoomsTable, {
+      fields: [watchRoomMembersTable.roomId],
+      references: [watchRoomsTable.id]
+    }),
+    /** 成员用户（N — 1：成员记录 → 用户；同一用户可有多条历史记录，同时至多一条 active） */
+    user: one(usersTable, {
+      fields: [watchRoomMembersTable.userId],
+      references: [usersTable.id]
+    })
+  })
+);
+
+/** 放映室邀请凭证表关系 */
+export const watchRoomInvitesRelations = relations(
+  watchRoomInvitesTable,
+  ({ one }) => ({
+    /** 所属房间（N — 1：凭证 → 房间） */
+    room: one(watchRoomsTable, {
+      fields: [watchRoomInvitesTable.roomId],
+      references: [watchRoomsTable.id]
+    }),
+    /** 创建者（N — 1：凭证 → 用户，即生成凭证时的房主） */
+    creator: one(usersTable, {
+      fields: [watchRoomInvitesTable.createdBy],
+      references: [usersTable.id]
+    })
+  })
+);
+
+/** 放映室消息表关系 */
+export const watchRoomMessagesRelations = relations(
+  watchRoomMessagesTable,
+  ({ one }) => ({
+    /** 所属房间（N — 1：消息 → 房间） */
+    room: one(watchRoomsTable, {
+      fields: [watchRoomMessagesTable.roomId],
+      references: [watchRoomsTable.id]
+    }),
+    /** 发送者（N — 1：消息 → 用户，可选——系统通知无发送者，删除账号时消息级联删除） */
+    user: one(usersTable, {
+      fields: [watchRoomMessagesTable.userId],
+      references: [usersTable.id]
+    })
+  })
+);

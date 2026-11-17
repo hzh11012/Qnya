@@ -38,6 +38,13 @@ const createRbacMiddleware = () => {
    */
   const canAccessAdult = (role: string) => ADULT_ALLOWED_ROLES.includes(role);
 
+  /**
+   * 角色等级判断（单一事实来源；未知角色视为等级不足）
+   * 供 requireRoleAtLeast 与非 Fastify 上下文（Socket.IO 握手）复用
+   */
+  const hasRoleAtLeast = (role: string, roleCode: string) =>
+    (ROLE_LEVEL[role] ?? -1) >= (ROLE_LEVEL[roleCode] ?? 99);
+
   return {
     /**
      * 要求角色等级不低于指定角色（未登录 → 401；等级不足 → 403）
@@ -46,9 +53,7 @@ const createRbacMiddleware = () => {
     requireRoleAtLeast(roleCode: string) {
       return async (request: FastifyRequest, reply: FastifyReply) => {
         if (!requireSession(request, reply)) return reply;
-        const role = request.sessionData!.role;
-        // 未知角色要求（roleCode 拼写错误等）一律拒绝，避免误放行
-        if ((ROLE_LEVEL[role] ?? -1) < (ROLE_LEVEL[roleCode] ?? 99)) {
+        if (!hasRoleAtLeast(request.sessionData!.role, roleCode)) {
           return reply.forbidden('权限不足');
         }
       };
@@ -75,7 +80,10 @@ const createRbacMiddleware = () => {
     /** 角色是否能访问 adult 内容（供需要按角色差异化返回数据的接口使用） */
     isAdultAllowed(role: string) {
       return canAccessAdult(role);
-    }
+    },
+
+    /** 角色等级判断（非 Fastify 上下文复用，如 Socket.IO 握手） */
+    hasRoleAtLeast
   };
 };
 

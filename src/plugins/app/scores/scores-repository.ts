@@ -10,7 +10,7 @@ import { calcOffset, buildOrderBy } from '../../../utils/paginated-query.js';
 import { escapeLike } from '../../../utils/like.js';
 import { t2s } from '../../../utils/t2s.js';
 import { invalidateDashboardCache } from '../dashboard/dashboard-repository.js';
-import { syncAnimeScore } from './sync-anime-score.js';
+import { syncAnimeScore } from '../../../utils/anime-score.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
