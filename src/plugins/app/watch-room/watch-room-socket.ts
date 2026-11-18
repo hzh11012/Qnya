@@ -355,29 +355,18 @@ const registerWatchRoomSocket = async (fastify: FastifyInstance) => {
       WatchRoomSocketJoinSchema,
       joinLimiter,
       async ({ roomId, ...input }, session) => {
-        try {
-          // 按当前会话角色过滤：房间正在播放无权观看的内容时拒绝加入
-          const excludeTypes = rbac.excludeTypesFor(session.role);
-          const outcome = await service.joinRoom(
-            userId,
-            roomId,
-            input,
-            excludeTypes
-          );
+        // 按当前会话角色过滤：房间正在播放无权观看的内容时拒绝加入
+        const excludeTypes = rbac.excludeTypesFor(session.role);
+        const outcome = await service.joinRoom(
+          userId,
+          roomId,
+          input,
+          excludeTypes
+        );
+        await socket.join(`room:${roomId}`);
 
-          await socket.join(`room:${roomId}`);
-
-          const state = await service.getRoomState(
-            userId,
-            roomId,
-            excludeTypes
-          );
-          return { alreadyJoined: outcome.alreadyJoined, state };
-        } catch (error) {
-          if (error instanceof RoomError) throw error;
-          fastify.log.error({ error }, 'watch-room room:join failed');
-          throw new RoomError('ROOM_SWITCH_FAILED', '加入房间失败');
-        }
+        const state = await service.getRoomState(userId, roomId, excludeTypes);
+        return { alreadyJoined: outcome.alreadyJoined, state };
       }
     );
 
@@ -387,13 +376,6 @@ const registerWatchRoomSocket = async (fastify: FastifyInstance) => {
       WatchRoomSocketLeaveSchema,
       actionLimiter,
       ({ roomId }) => service.leaveRoom(userId, { roomId })
-    );
-
-    handle(
-      'room:close',
-      WatchRoomSocketRoomSchema,
-      actionLimiter,
-      ({ roomId }) => service.closeRoom(userId, roomId)
     );
 
     handle(

@@ -12,10 +12,8 @@ import {
 export const WATCH_ROOM_EVENT_TYPES = [
   'member_joined',
   'member_left',
-  'member_switched',
   'member_kicked',
-  'room_updated',
-  'room_closed'
+  'room_updated'
 ] as const;
 
 export type WatchRoomEventType = (typeof WATCH_ROOM_EVENT_TYPES)[number];
@@ -31,7 +29,6 @@ export const WATCH_ROOM_ERROR_CODES = [
   'ROOM_PASSWORD_INVALID',
   'ROOM_PERMISSION_DENIED',
   'ROOM_MEMBER_NOT_FOUND',
-  'ROOM_SWITCH_FAILED',
   'VIDEO_NOT_FOUND',
   'VIDEO_UNAVAILABLE',
   'SESSION_INVALID',
@@ -50,7 +47,6 @@ export const WATCH_ROOM_ERROR_STATUS: Record<WatchRoomErrorCode, number> = {
   ROOM_PASSWORD_INVALID: 403,
   ROOM_PERMISSION_DENIED: 403,
   ROOM_MEMBER_NOT_FOUND: 404,
-  ROOM_SWITCH_FAILED: 409,
   VIDEO_NOT_FOUND: 404,
   VIDEO_UNAVAILABLE: 409,
   SESSION_INVALID: 401,
@@ -174,7 +170,7 @@ const PlaybackPositionSchema = z
   .min(0)
   .max(86400 * 7);
 
-/** 仅携带 roomId 的事件（room:close / playback:pause） */
+/** 仅携带 roomId 的事件（playback:pause） */
 export const WatchRoomSocketRoomSchema = z.object(SocketRoomIdShape);
 
 export const WatchRoomSocketJoinSchema =
@@ -228,8 +224,7 @@ export type WatchRoomUserBrief = z.infer<typeof WatchRoomUserBriefSchema>;
 export const WatchRoomSystemInfoSchema = z.object({
   eventType: z.enum(WATCH_ROOM_EVENT_TYPES),
   operator: WatchRoomUserBriefSchema.optional(),
-  target: WatchRoomUserBriefSchema.optional(),
-  metadata: z.record(z.string(), z.unknown()).optional()
+  target: WatchRoomUserBriefSchema.optional()
 });
 
 /** 房间消息（聊天 + 系统通知统一结构） */
@@ -302,10 +297,7 @@ export type WatchRoomDetail = z.infer<typeof WatchRoomDetailSchema>;
 /** 房间完整状态（成员视角） */
 export const WatchRoomStateSchema = WatchRoomDetailSchema.extend({
   members: z.array(WatchRoomMemberSchema),
-  me: z.object({
-    role: z.enum(['owner', 'member']),
-    canControlPlayback: z.boolean()
-  })
+  me: z.object({ role: z.enum(['owner', 'member']) })
 });
 
 export type WatchRoomState = z.infer<typeof WatchRoomStateSchema>;

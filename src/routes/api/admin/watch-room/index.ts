@@ -28,8 +28,8 @@ export default async function (fastify: FastifyInstance) {
   ];
 
   /**
-   * 房间列表（管理端：含私人/已关闭房间，
-   * 支持状态/可见性筛选与房名/房主昵称搜索）
+   * 房间列表（管理端：含私人房间，
+   * 支持可见性筛选与房名/房主昵称搜索）
    */
   fastify.get<{ Querystring: AdminWatchRoomListQuery }>(
     '/',

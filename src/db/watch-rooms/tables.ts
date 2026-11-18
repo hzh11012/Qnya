@@ -11,13 +11,11 @@ import {
   uuid,
   varchar
 } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
 import { idColumn, timestamps } from '../columns.helpers.js';
 import { usersTable } from '../users/index.js';
 import { videosTable } from '../videos/index.js';
 import {
   watchRoomMemberRoleEnum,
-  watchRoomMemberStatusEnum,
   watchRoomMessageTypeEnum,
   watchRoomVisibilityEnum
 } from './enums.js';
@@ -70,7 +68,10 @@ export const watchRoomsTable = pgTable(
   ]
 );
 
-/** 放映室成员表 */
+/**
+ * 放映室成员表：只保存在房成员（单会话模型：在房即连接中），
+ * 离开 / 被踢 / 断开时直接删除记录
+ */
 export const watchRoomMembersTable = pgTable(
   'watch_room_members',
   {
@@ -85,17 +86,12 @@ export const watchRoomMembersTable = pgTable(
       .references(() => usersTable.id, { onDelete: 'cascade' }),
     /** 角色：owner 房主 / member 普通成员 */
     role: watchRoomMemberRoleEnum().notNull().default('member'),
-    /** 状态：active 在房（单会话模型：在房即连接中）/ left 离开（含断开退出）/ kicked 被移出 */
-    status: watchRoomMemberStatusEnum().notNull().default('active'),
     ...timestamps
   },
   table => [
-    index('watch_room_members_room_status_idx').on(table.roomId, table.status),
-    // 全平台单房间限制：一个用户全局最多一条 active 成员记录
-    // （跨房间唯一；断开连接即结束成员资格，active 始终对应唯一活跃会话）
-    uniqueIndex('uq_watch_room_members_active_user')
-      .on(table.userId)
-      .where(sql`status = 'active'`)
+    index('watch_room_members_room_idx').on(table.roomId),
+    // 全平台单房间限制：一个用户全局最多一条成员记录
+    uniqueIndex('uq_watch_room_members_user').on(table.userId)
   ]
 );
 

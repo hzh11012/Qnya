@@ -3,7 +3,7 @@ import { pgEnum } from 'drizzle-orm/pg-core';
 /**
  * 房间可见性枚举
  * @member public 公开房间（出现在放映室大厅）
- * @member private 私人房间（仅邀请加入）
+ * @member private 私人房间（不在大厅展示，凭密码加入）
  */
 export const watchRoomVisibilityEnum = pgEnum('watch_room_visibility', [
   'public',
@@ -18,18 +18,6 @@ export const watchRoomVisibilityEnum = pgEnum('watch_room_visibility', [
 export const watchRoomMemberRoleEnum = pgEnum('watch_room_member_role', [
   'owner',
   'member'
-]);
-
-/**
- * 房间成员状态枚举
- * @member active 在房（单会话模型：在房即连接中）
- * @member left 主动离开/切换房间/房间解散/断开退出
- * @member kicked 被房主移出
- */
-export const watchRoomMemberStatusEnum = pgEnum('watch_room_member_status', [
-  'active',
-  'left',
-  'kicked'
 ]);
 
 /**

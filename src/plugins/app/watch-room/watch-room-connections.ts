@@ -30,11 +30,6 @@ const createWatchRoomConnections = () => {
       io?.to(`room:${roomId}`).emit(event, payload);
     },
 
-    /** 向用户的当前连接广播 */
-    emitToUser(userId: string, event: string, payload: unknown) {
-      io?.to(`user:${userId}`).emit(event, payload);
-    },
-
     /** 让用户的当前连接离开指定 Socket.IO 房间（切换/离开/踢人时清理） */
     dropUserFromRoom(userId: string, roomId: string) {
       io?.in(`user:${userId}`).socketsLeave(`room:${roomId}`);

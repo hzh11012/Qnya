@@ -15,7 +15,7 @@ import { replyRoomError, RoomError } from '../../../../utils/watch-room.js';
 
 /**
  * 放映室 HTTP 接口：仅提供查询。
- * 建房 / 加入 / 离开 / 关闭 / 修改 / 踢人 / 播放控制 / 聊天全部走 Socket
+ * 建房 / 加入 / 离开 / 修改 / 踢人 / 播放控制 / 聊天全部走 Socket
  */
 export default async function (fastify: FastifyInstance) {
   const { watchRoomService: service } = fastify;
