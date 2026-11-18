@@ -1,8 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
-import { createHash, randomBytes } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
-import { watchRoomsTable } from '../../../db/index.js';
+import { watchRoomsTable, type AnimeType } from '../../../db/index.js';
 import type { watchRoomMessagesTable as MessagesTable } from '../../../db/index.js';
 import type {
   AdminWatchRoomListQuery,
@@ -39,13 +38,6 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
   // 内部工具
   // ============================================
 
-  /** 邀请凭证 SHA-256 哈希（数据库只存哈希，不存明文） */
-  const hashToken = (token: string) =>
-    createHash('sha256').update(token).digest('hex');
-
-  /** 生成高强度随机邀请凭证（base64url，不可预测） */
-  const generateToken = () => randomBytes(32).toString('base64url');
-
   /** 根据 room 行推算当前权威播放位置（播放中按服务端时间外推） */
   const computePlayback = (room: typeof watchRoomsTable.$inferSelect) => {
     const elapsedSeconds = room.isPlaying
@@ -60,9 +52,12 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
     };
   };
 
-  /** 查用户简要信息 */
-  const getUserBrief = async (userId: string): Promise<WatchRoomUserBrief> => {
-    const briefs = await repo.findUserBriefs([userId]);
+  /** 事务内查用户简要信息（复用事务连接，不另占连接池） */
+  const getUserBrief = async (
+    tx: Tx,
+    userId: string
+  ): Promise<WatchRoomUserBrief> => {
+    const briefs = await repo.findUserBriefs([userId], tx);
     const brief = briefs.get(userId);
     if (!brief) throw new RoomError('ROOM_MEMBER_NOT_FOUND', '用户不存在');
     return { userId, nickname: brief.nickname, avatar: brief.avatar };
@@ -138,7 +133,6 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
     const room = await repo.lockRoomById(tx, roomId);
     if (!room) return false; // 不存在/已删除，幂等返回
 
-    const memberUserIds = await repo.findRoomMemberUserIds(tx, roomId);
     const deleted = await repo.deleteRoom(tx, roomId);
     if (!deleted) return false;
 
@@ -155,7 +149,6 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
         }
       });
       conn.dropRoom(roomId);
-      conn.clearRoomState(roomId, memberUserIds).catch(() => undefined);
     });
     return true;
   };
@@ -167,8 +160,16 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
     eventType: Extract<WatchRoomEventType, 'member_left' | 'member_switched'>,
     flush: Flush
   ) => {
-    const brief = await getUserBrief(membership.userId);
-    await repo.endMembership(tx, membership.id, 'left');
+    // 先锁房间行再改成员行（与解散/踢人保持"房间 → 成员"的加锁顺序：
+    // 反序会与房主解散的级联删除互相等待而死锁）。房间已解散则无需离开
+    const room = await repo.lockRoomById(tx, membership.roomId);
+    if (!room) return;
+
+    // 已被并发结束（如同时被房主踢出）：不再重复发离开通知
+    const ended = await repo.endMembership(tx, membership.id, 'left');
+    if (!ended) return;
+
+    const brief = await getUserBrief(tx, membership.userId);
 
     const content =
       eventType === 'member_switched'
@@ -185,12 +186,6 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
     );
 
     flush(() => {
-      conn
-        .clearUserRoom(membership.userId, membership.roomId)
-        .catch(() => undefined);
-      conn
-        .markRoomOffline(membership.roomId, membership.userId)
-        .catch(() => undefined);
       conn.dropUserFromRoom(membership.userId, membership.roomId);
       conn.emitToRoom(membership.roomId, 'room:member-left', {
         roomId: membership.roomId,
@@ -248,7 +243,10 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
   return {
     computePlayback,
 
-    /** 创建房间（创建者自动成为房主并进入房间；已在其他房间则按切换规则处理） */
+    /**
+     * 创建房间（创建者自动成为房主并进入房间；已在其他房间则按切换规则处理）
+     * @param excludeTypes 创建者无权访问的动漫类型（初始视频不能属于这些类型）
+     */
     async createRoom(
       userId: string,
       input: {
@@ -256,42 +254,40 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
         visibility: 'public' | 'private';
         announcement?: string | null;
         password?: string;
-        videoId?: string;
-      }
+        videoId: string;
+      },
+      excludeTypes?: AnimeType[]
     ) {
       if (input.password && input.visibility !== 'private') {
-        throw new RoomError('ROOM_PERMISSION_DENIED', '仅私人房间可以设置密码');
+        throw new RoomError('INVALID_PARAMS', '仅私人房间可以设置密码');
+      }
+      if (!input.password && input.visibility === 'private') {
+        throw new RoomError('INVALID_PARAMS', '私人房间必须设置密码');
       }
 
-      if (input.videoId) {
-        const video = await repo.findPlayableVideo(input.videoId);
-        if (!video)
-          throw new RoomError('VIDEO_NOT_FOUND', '视频不存在或不可播放');
-      }
+      const video = await repo.findPlayableVideo(input.videoId, excludeTypes);
+      if (!video)
+        throw new RoomError('VIDEO_NOT_FOUND', '视频不存在或不可播放');
 
-      const room = await runExclusive(userId, async (tx, flush) => {
+      // scrypt 刻意耗时，放在事务外计算，避免持有数据库连接与用户锁期间阻塞
+      const passwordHash = input.password
+        ? await hashRoomPassword(input.password)
+        : null;
+
+      return runExclusive(userId, async (tx, flush) => {
         const room = await repo.createRoom(tx, {
           ownerId: userId,
           name: input.name,
           announcement: input.announcement ?? null,
           visibility: input.visibility,
-          passwordHash: null, // 下面补充哈希
-          currentVideoId: input.videoId ?? null
+          passwordHash,
+          currentVideoId: input.videoId
         });
-
-        // scrypt 快速，事务内同步计算，保证创建与密码写入原子生效
-        if (input.password) {
-          const passwordHash = await hashRoomPassword(input.password);
-          await tx
-            .update(watchRoomsTable)
-            .set({ passwordHash })
-            .where(eq(watchRoomsTable.id, room.id));
-        }
 
         // 先处理旧房间（插入新 active 成员前必须释放唯一索引槽位）
         const existing = await repo.findActiveMembershipByUser(userId, tx);
         if (existing) {
-          const brief = await getUserBrief(userId);
+          const brief = await getUserBrief(tx, userId);
           if (existing.role === 'owner') {
             await dissolveRoomTx(
               tx,
@@ -307,7 +303,7 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
 
         await repo.insertMember(tx, { roomId: room.id, userId, role: 'owner' });
 
-        const brief = await getUserBrief(userId);
+        const brief = await getUserBrief(tx, userId);
         await pushSystemMessage(
           tx,
           room.id,
@@ -319,55 +315,69 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
 
         return room;
       });
-
-      // Redis 归属回写（创建即进入房间）
-      await conn.setUserRoom(userId, room.id);
-
-      return room;
     },
 
     /**
-     * 加入房间（统一入口：HTTP join 与 Socket room:join 都走这里）
+     * 加入房间（Socket room:join）
      *
-     * 顺序严格遵守 PRD：先完整验证目标房间（存在/开放/凭证/密码/人数），
+     * 顺序严格遵守 PRD：先完整验证目标房间（存在/密码/人数），
      * 全部通过后才退出旧房间（房主则解散）——目标验证失败时原房间不受影响。
+     * @param excludeTypes 加入者无权访问的动漫类型（房间正在播放这些类型时拒绝加入）
      */
-    async joinRoom(userId: string, roomId: string, input: WatchRoomJoinInput) {
-      const outcome = await runExclusive(userId, async (tx, flush) => {
-        const room = await repo.lockRoomById(tx, roomId);
+    async joinRoom(
+      userId: string,
+      roomId: string,
+      input: WatchRoomJoinInput,
+      excludeTypes?: AnimeType[]
+    ) {
+      const target = await repo.findRoomById(roomId);
+      if (!target) throw new RoomError('ROOM_NOT_FOUND', '房间不存在');
+
+      // scrypt 刻意耗时，不能在持有数据库连接、用户锁与房间行锁期间计算：
+      // 事务前预先校验（房间密码创建后不可修改，结果在事务内仍然有效）
+      const passwordValid =
+        !target.passwordHash ||
+        (!!input.password &&
+          (await verifyRoomPassword(input.password, target.passwordHash)));
+
+      return runExclusive(userId, async (tx, flush) => {
+        // 目标房间与旧房间按 id 顺序一次锁定（两个房主互相加入对方房间时，
+        // 分别先锁目标再锁旧房间会死锁）
+        const current = await repo.findActiveMembershipByUser(userId, tx);
+        const rooms = await repo.lockRoomsByIds(
+          tx,
+          current && current.roomId !== roomId
+            ? [roomId, current.roomId]
+            : [roomId]
+        );
+        const room = rooms.get(roomId);
         if (!room) throw new RoomError('ROOM_NOT_FOUND', '房间不存在');
 
-        // —— 目标房间验证（失败直接抛错，旧房间保留）——
-        if (room.visibility === 'private') {
-          if (!input.inviteToken) {
-            throw new RoomError('ROOM_PRIVATE', '私人房间需要邀请凭证');
-          }
-          const result = await repo.findValidInvite(
-            tx,
-            roomId,
-            hashToken(input.inviteToken)
-          );
-          if (!result.invite) {
-            throw result.expired
-              ? new RoomError('INVITE_EXPIRED', '邀请凭证已过期')
-              : new RoomError('INVITE_INVALID', '邀请凭证无效');
-          }
-        }
-
-        if (room.passwordHash) {
-          if (
-            !input.password ||
-            !(await verifyRoomPassword(input.password, room.passwordHash))
-          ) {
-            throw new RoomError('ROOM_PASSWORD_INVALID', '房间密码错误');
-          }
-        }
-
+        // 等锁期间旧房间可能已被解散 / 用户被踢出：加锁后重新读取成员关系
         const existing = await repo.findActiveMembershipByUser(userId, tx);
 
-        // 已在目标房间：幂等返回，不重复通知
+        // 已在目标房间：幂等返回，不重复通知（已是成员，无需再校验密码）
         if (existing && existing.roomId === roomId) {
           return { alreadyJoined: true as const, roomId };
+        }
+
+        // —— 目标房间验证（失败直接抛错，旧房间保留）——
+        if (!passwordValid) {
+          throw input.password
+            ? new RoomError('ROOM_PASSWORD_INVALID', '房间密码错误')
+            : new RoomError('ROOM_PRIVATE', '私人房间需要输入密码');
+        }
+
+        // 混合角色房间：正在播放的内容加入者无权观看时拒绝加入
+        // （视频已下架/草稿不阻止加入，房主可另行切换）
+        if (room.currentVideoId && excludeTypes?.length) {
+          const video = await repo.isVideoPlayable(tx, room.currentVideoId);
+          if (video && excludeTypes.includes(video.animeType)) {
+            throw new RoomError(
+              'VIDEO_UNAVAILABLE',
+              '房间正在播放你无权观看的内容'
+            );
+          }
         }
 
         const memberCount = await repo.countActiveMembers(tx, roomId);
@@ -379,7 +389,7 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
         let previousRoomId: string | null = null;
         if (existing) {
           previousRoomId = existing.roomId;
-          const brief = await getUserBrief(userId);
+          const brief = await getUserBrief(tx, userId);
           if (existing.role === 'owner') {
             await dissolveRoomTx(
               tx,
@@ -399,7 +409,7 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
           role: 'member'
         });
 
-        const brief = await getUserBrief(userId);
+        const brief = await getUserBrief(tx, userId);
         const joinedPayload = await pushSystemMessage(
           tx,
           roomId,
@@ -434,51 +444,26 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
 
         return { alreadyJoined: false as const, roomId, previousRoomId };
       });
-
-      // Redis 归属更新（事务提交后执行；重复加入同一房间时也回写，
-      // 修复 Redis 重启丢失归属后的状态恢复）
-      await conn.setUserRoom(userId, roomId);
-      if (outcome.previousRoomId) {
-        await conn.clearUserRoom(userId, outcome.previousRoomId);
-        await conn.markRoomOffline(outcome.previousRoomId, userId);
-      }
-
-      return outcome;
-    },
-
-    /**
-     * 邀请链接直连加入：按凭证解析房间后复用 joinRoom 的统一验证流程
-     * （凭证有效性/过期在 joinRoom 内再次校验，保证与房间维度校验一致）
-     */
-    async joinRoomByInvite(
-      userId: string,
-      input: { token: string; password?: string }
-    ) {
-      const resolved = await repo.resolveInviteToken(hashToken(input.token));
-      if (!resolved.ok) {
-        throw resolved.expired
-          ? new RoomError('INVITE_EXPIRED', '邀请凭证已过期')
-          : new RoomError('INVITE_INVALID', '邀请凭证无效');
-      }
-      return this.joinRoom(userId, resolved.roomId, {
-        inviteToken: input.token,
-        ...(input.password && { password: input.password })
-      });
     },
 
     /**
      * 主动离开房间。房主主动离开（退出/关闭/切换）时房间立即解散，
-     * 不进行房主转让；幂等：不在任何房间时抛 ROOM_MEMBER_NOT_FOUND
+     * 不进行房主转让；不在任何房间时抛 ROOM_MEMBER_NOT_FOUND。
+     * 传入 roomId 时只离开该房间（客户端停留在旧房间页面时，
+     * 不能误退出、甚至误解散用户已切换到的新房间）
      */
-    async leaveRoom(userId: string, opts?: { switched?: boolean }) {
+    async leaveRoom(userId: string, opts?: { roomId?: string }) {
       return runExclusive(userId, async (tx, flush) => {
-        const membership = await repo.findActiveMembershipByUser(userId);
+        const membership = await repo.findActiveMembershipByUser(userId, tx);
         if (!membership) {
           throw new RoomError('ROOM_MEMBER_NOT_FOUND', '不在任何房间中');
         }
+        if (opts?.roomId && membership.roomId !== opts.roomId) {
+          throw new RoomError('ROOM_MEMBER_NOT_FOUND', '你不是该房间的成员');
+        }
 
         if (membership.role === 'owner') {
-          const brief = await getUserBrief(userId);
+          const brief = await getUserBrief(tx, userId);
           await dissolveRoomTx(
             tx,
             membership.roomId,
@@ -487,12 +472,7 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
             flush
           );
         } else {
-          await leaveRoomTx(
-            tx,
-            membership,
-            opts?.switched ? 'member_switched' : 'member_left',
-            flush
-          );
+          await leaveRoomTx(tx, membership, 'member_left', flush);
         }
 
         return { roomId: membership.roomId };
@@ -506,7 +486,7 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
         if (membership.role !== 'owner') {
           throw new RoomError('ROOM_PERMISSION_DENIED', '仅房主可以关闭房间');
         }
-        const brief = await getUserBrief(userId);
+        const brief = await getUserBrief(tx, userId);
         await dissolveRoomTx(
           tx,
           roomId,
@@ -537,8 +517,8 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
           throw new RoomError('ROOM_PERMISSION_DENIED', '无法移出房主');
         }
 
-        const operatorBrief = await getUserBrief(userId);
-        const targetBrief = await getUserBrief(targetUserId);
+        const operatorBrief = await getUserBrief(tx, userId);
+        const targetBrief = await getUserBrief(tx, targetUserId);
         await repo.endMembership(tx, target.id, 'kicked');
 
         const payload = await pushSystemMessage(
@@ -564,10 +544,6 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
           conn.dropUserFromRoom(targetUserId, roomId);
         });
       });
-
-      // 事务提交后清理 Redis 归属与在线状态
-      await conn.clearUserRoom(targetUserId, roomId);
-      await conn.markRoomOffline(roomId, targetUserId);
     },
 
     /** 房主修改房间信息（名称/公告） */
@@ -588,14 +564,14 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
           );
         }
 
-        const updated = await repo.updateRoomInfo(roomId, {
+        const updated = await repo.updateRoomInfo(tx, roomId, {
           ...(input.name !== undefined ? { name: input.name } : {}),
           ...(input.announcement !== undefined
             ? { announcement: input.announcement }
             : {})
         });
 
-        const operatorBrief = await getUserBrief(userId);
+        const operatorBrief = await getUserBrief(tx, userId);
         const payload = await pushSystemMessage(
           tx,
           roomId,
@@ -618,85 +594,22 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
       });
     },
 
-    /**
-     * 创建/重新生成邀请凭证（房主）。
-     * 重新生成后旧凭证立即失效；targetUserId 可选（生成邀请通知）。
-     */
-    async createInvite(
-      userId: string,
-      roomId: string,
-      input: { userId?: string; expiresInDays?: number }
-    ) {
-      return runExclusive(userId, async (tx, flush) => {
-        const room = await repo.lockRoomById(tx, roomId);
-        if (!room) throw new RoomError('ROOM_NOT_FOUND', '房间不存在');
-        if (room.visibility !== 'private') {
-          throw new RoomError(
-            'ROOM_PERMISSION_DENIED',
-            '公开房间不需要邀请凭证'
-          );
-        }
-
-        const membership = await requireMembership(userId, roomId, tx);
-        if (membership.role !== 'owner') {
-          throw new RoomError(
-            'ROOM_PERMISSION_DENIED',
-            '仅房主可以生成邀请凭证'
-          );
-        }
-
-        const token = generateToken();
-        const expiresAt = input.expiresInDays
-          ? new Date(Date.now() + input.expiresInDays * 86400_000)
-          : null;
-
-        const invite = await repo.createInvite(tx, {
-          roomId,
-          tokenHash: hashToken(token),
-          createdBy: userId,
-          expiresAt
-        });
-
-        // 邀请通知：仅代表邀请已发出，不代表被邀请用户已加入
-        if (input.userId) {
-          const targetBriefs = await repo.findUserBriefs([input.userId]);
-          const targetBrief = targetBriefs.get(input.userId);
-          if (!targetBrief) {
-            throw new RoomError('ROOM_MEMBER_NOT_FOUND', '被邀请用户不存在');
-          }
-          const operatorBrief = await getUserBrief(userId);
-          await pushSystemMessage(
-            tx,
-            roomId,
-            'member_invited',
-            `房主 ${operatorBrief.nickname} 邀请了 ${targetBrief.nickname} 加入房间`,
-            {
-              operator: operatorBrief,
-              target: { userId: input.userId, ...targetBrief }
-            },
-            flush
-          );
-        }
-
-        return { token, expiresAt: invite.expiresAt };
-      });
-    },
-
     // ============================================
     // 查询
     // ============================================
 
-    /** 公开房间列表（大厅：分页/排序/搜索，附实时在线人数与当前视频） */
-    async listPublicRooms(query: WatchRoomListQuery) {
-      const { items, total } = await repo.findPublicRooms(query);
-
-      // 并行拉取各房间实时在线名单（Redis 集合）
-      const onlineLists = await Promise.all(
-        items.map(item => conn.getRoomOnlineUsers(item.id))
-      );
+    /**
+     * 公开房间列表（大厅：按创建时间倒序分页，附成员数与当前视频）
+     * @param excludeTypes 观看者无权访问的动漫类型（正在播放这些类型的房间不展示）
+     */
+    async listPublicRooms(
+      query: WatchRoomListQuery,
+      excludeTypes: AnimeType[] | undefined
+    ) {
+      const { items, total } = await repo.findPublicRooms(query, excludeTypes);
 
       return {
-        items: items.map((item, index) => ({
+        items: items.map(item => ({
           id: item.id,
           name: item.name,
           ownerId: item.ownerId,
@@ -705,7 +618,6 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
             nickname: item.ownerName,
             avatar: item.ownerAvatar
           },
-          onlineCount: onlineLists[index].length,
           memberCount: Number(item.memberCount),
           maxMembers: item.maxMembers,
           isPlaying: item.isPlaying,
@@ -725,8 +637,15 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
       };
     },
 
-    /** 房间详情（公开房间任何人可见；私人房间对非成员等同不存在，防泄露） */
-    async getRoomDetail(roomId: string, viewerId?: string) {
+    /**
+     * 房间详情（公开房间任何人可见；私人房间对非成员等同不存在，防泄露）
+     * @param excludeTypes 观看者无权访问的动漫类型（命中时不返回当前视频信息）
+     */
+    async getRoomDetail(
+      roomId: string,
+      viewerId?: string,
+      excludeTypes?: AnimeType[]
+    ) {
       const room = await repo.findRoomById(roomId);
       if (!room) throw new RoomError('ROOM_NOT_FOUND', '房间不存在');
 
@@ -740,14 +659,13 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
         throw new RoomError('ROOM_NOT_FOUND', '房间不存在');
       }
 
-      const [briefs, onlineUserIds, memberCount, video] = await Promise.all([
+      const [briefs, memberCount, video] = await Promise.all([
         repo.findUserBriefs([room.ownerId]),
-        // 在线人数以 Redis 实时集合为准（成员关系统一以 active 记录为准）
-        conn.getRoomOnlineUsers(roomId),
         repo.countActiveMembers(db, roomId),
-        room.currentVideoId ? repo.findPlayableVideo(room.currentVideoId) : null
+        room.currentVideoId
+          ? repo.findPlayableVideo(room.currentVideoId, excludeTypes)
+          : null
       ]);
-      const onlineCount = onlineUserIds.length;
 
       const ownerBrief = briefs.get(room.ownerId);
       if (!ownerBrief) throw new RoomError('ROOM_NOT_FOUND', '房主不存在');
@@ -763,7 +681,6 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
           nickname: ownerBrief.nickname,
           avatar: ownerBrief.avatar
         },
-        onlineCount,
         memberCount,
         maxMembers: room.maxMembers,
         playback: computePlayback(room),
@@ -782,8 +699,12 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
     },
 
     /** 房间完整状态（成员视角：成员列表 + 我的角色）。单会话模型下在房成员即在线 */
-    async getRoomState(userId: string, roomId: string) {
-      const detail = await this.getRoomDetail(roomId, userId);
+    async getRoomState(
+      userId: string,
+      roomId: string,
+      excludeTypes?: AnimeType[]
+    ) {
+      const detail = await this.getRoomDetail(roomId, userId, excludeTypes);
       await requireMembership(userId, roomId);
 
       const members = await repo.findRoomMembers(roomId);
@@ -806,24 +727,10 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
     },
 
     /** 当前用户所在房间（跨设备状态恢复 / 加入前检查） */
-    async getCurrentRoom(userId: string) {
-      const roomId = await conn.getUserRoom(userId);
-      if (!roomId) return null;
-
-      // Redis 归属可能因房间解散/踢人产生残留，以数据库为准校验
+    async getCurrentRoom(userId: string, excludeTypes?: AnimeType[]) {
       const membership = await repo.findActiveMembershipByUser(userId);
-      if (!membership || membership.roomId !== roomId) {
-        await conn.clearUserRoom(userId, roomId);
-        return null;
-      }
-
-      const room = await repo.findRoomById(roomId);
-      if (!room) {
-        await conn.clearUserRoom(userId, roomId);
-        return null;
-      }
-
-      return this.getRoomState(userId, roomId);
+      if (!membership) return null;
+      return this.getRoomState(userId, membership.roomId, excludeTypes);
     },
 
     /** 房间消息历史（聊天 + 系统通知统一分页） */
@@ -876,12 +783,16 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
     /**
      * 播放控制统一入口：验证房主权限 → 更新权威状态 → 广播 sync
      * 播放过程不写库，仅在操作时刻更新持久化状态
+     *
+     * @param value play/seek 为播放位置（秒；play 不传则从当前位置继续），change_video 为视频ID
+     * @param excludeTypes 房主无权访问的动漫类型（change_video 不能切到这些类型）
      */
     async controlPlayback(
       userId: string,
       roomId: string,
       action: 'play' | 'pause' | 'seek' | 'change_video',
-      value?: number | string
+      value?: number | string,
+      excludeTypes?: AnimeType[]
     ) {
       return runExclusive(userId, async (tx, flush) => {
         const room = await repo.lockRoomById(tx, roomId);
@@ -905,7 +816,9 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
           case 'play':
             patch = {
               isPlaying: true,
-              playbackPosition: currentPosition,
+              // 附带位置时等价于 seek + play，只产生一次版本变更与广播
+              playbackPosition:
+                (value as number | undefined) ?? currentPosition,
               playbackUpdatedAt: new Date(),
               playbackRevision: room.playbackRevision + 1
             };
@@ -931,9 +844,20 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
           }
           case 'change_video': {
             const videoId = value as string;
-            const video = await repo.isVideoPlayable(tx, videoId);
+            const video = await repo.isVideoPlayable(tx, videoId, excludeTypes);
             if (!video) {
               throw new RoomError('VIDEO_NOT_FOUND', '视频不存在或不可播放');
+            }
+            // 混合角色房间：不能切到房间内任一成员无权观看的内容
+            const roles = await repo.findActiveMemberRoles(tx, roomId);
+            const blocked = roles.some(role =>
+              fastify.rbac.excludeTypesFor(role)?.includes(video.animeType)
+            );
+            if (blocked) {
+              throw new RoomError(
+                'VIDEO_UNAVAILABLE',
+                '房间内有成员无法观看该视频'
+              );
             }
             patch = {
               currentVideoId: videoId,
@@ -974,7 +898,7 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
 
         await requireMembership(userId, roomId, tx);
 
-        const briefs = await repo.findUserBriefs([userId]);
+        const briefs = await repo.findUserBriefs([userId], tx);
         const brief = briefs.get(userId);
         if (!brief) throw new RoomError('ROOM_MEMBER_NOT_FOUND', '用户不存在');
 
@@ -1004,53 +928,19 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
     // 房主断开 → 解散；普通成员断开 → 退出房间
     // ============================================
 
-    /**
-     * Socket 断开时的房间退出处理。
-     *
-     * 归属与成员资格已失效（重复断开/已被移出）时仅做 Redis 兜底清理。
-     */
-    async disconnectLeave(userId: string, roomId: string) {
-      try {
-        return await runExclusive(userId, async (tx, flush) => {
-          const membership = await repo.findActiveMembershipByUser(userId, tx);
-          if (!membership || membership.roomId !== roomId) return;
-
-          const brief = await getUserBrief(userId);
-          if (membership.role === 'owner') {
-            await dissolveRoomTx(
-              tx,
-              roomId,
-              brief,
-              `房主 ${brief.nickname} 断开连接，房间已解散`,
-              flush
-            );
-          } else {
-            await leaveRoomTx(tx, membership, 'member_left', flush);
-          }
-        });
-      } finally {
-        // 兜底清理：成员资格可能已失效（leave/dissolve 的 flush 已处理过的场景幂等）
-        await conn.clearUserRoom(userId, roomId).catch(() => undefined);
-        await conn.markRoomOffline(roomId, userId).catch(() => undefined);
-      }
-    },
-
-    /**
-     * 用户被禁用时的连带处理：房主房间解散，成员退出所在房间。
-     * （房主账号被删除时房间由外键级联删除，无需处理）
-     */
-    async handleUserDisabled(userId: string) {
-      return runExclusive(userId, async (tx, flush) => {
+    /** Socket 断开时的房间退出处理（不在任何房间时直接返回） */
+    async disconnectLeave(userId: string) {
+      await runExclusive(userId, async (tx, flush) => {
         const membership = await repo.findActiveMembershipByUser(userId, tx);
         if (!membership) return;
 
-        const brief = await getUserBrief(userId);
+        const brief = await getUserBrief(tx, userId);
         if (membership.role === 'owner') {
           await dissolveRoomTx(
             tx,
             membership.roomId,
             brief,
-            `房主 ${brief.nickname} 账号已被停用，房间已解散`,
+            `房主 ${brief.nickname} 断开连接，房间已解散`,
             flush
           );
         } else {
@@ -1059,20 +949,58 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
       });
     },
 
+    /**
+     * 用户被禁用时的连带处理：房主房间解散，成员退出所在房间，
+     * 并断开其全部 Socket 连接。
+     * （房主账号被删除时房间由外键级联删除，无需处理）
+     */
+    async handleUserDisabled(userId: string) {
+      try {
+        await runExclusive(userId, async (tx, flush) => {
+          const membership = await repo.findActiveMembershipByUser(userId, tx);
+          if (!membership) return;
+
+          const brief = await getUserBrief(tx, userId);
+          if (membership.role === 'owner') {
+            await dissolveRoomTx(
+              tx,
+              membership.roomId,
+              brief,
+              `房主 ${brief.nickname} 账号已被停用，房间已解散`,
+              flush
+            );
+          } else {
+            await leaveRoomTx(tx, membership, 'member_left', flush);
+          }
+        });
+      } finally {
+        // 已建立的连接不会重新握手，必须主动断开；房间清理失败时，
+        // 断开触发的离开逻辑也会再兜底一次
+        conn.disconnectUser(userId);
+      }
+    },
+
+    /**
+     * 清空全部房间（服务启动时调用）：单实例 + 断开即离开，启动时不存在任何连接，
+     * 上次关闭/崩溃前没来得及执行离开逻辑的房间全部解散（成员/消息级联删除）
+     */
+    async clearAllRooms() {
+      const deleted = await db
+        .delete(watchRoomsTable)
+        .returning({ id: watchRoomsTable.id });
+      return deleted.length;
+    },
+
     // ============================================
     // 管理端（admin）：跨房间治理，不要求操作者是房间成员
     // ============================================
 
-    /** 管理端房间列表（含私人/已关闭房间，附实时在线人数） */
+    /** 管理端房间列表（含私人房间，附成员数） */
     async adminListRooms(query: AdminWatchRoomListQuery) {
       const { items, total } = await repo.findRoomsForAdmin(query);
 
-      const onlineLists = await Promise.all(
-        items.map(item => conn.getRoomOnlineUsers(item.id))
-      );
-
       return {
-        items: items.map((item, index) => ({
+        items: items.map(item => ({
           id: item.id,
           name: item.name,
           announcement: item.announcement,
@@ -1084,7 +1012,6 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
             avatar: item.ownerAvatar
           },
           memberCount: Number(item.memberCount),
-          onlineCount: onlineLists[index].length,
           maxMembers: item.maxMembers,
           isPlaying: item.isPlaying,
           currentVideo: item.currentVideoId
@@ -1113,7 +1040,7 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
         const room = await repo.lockRoomById(tx, roomId);
         if (!room) throw new RoomError('ROOM_NOT_FOUND', '房间不存在');
 
-        const updated = await repo.updateRoomInfo(roomId, {
+        const updated = await repo.updateRoomInfo(tx, roomId, {
           ...(input.name !== undefined ? { name: input.name } : {}),
           ...(input.announcement !== undefined
             ? { announcement: input.announcement }
@@ -1121,7 +1048,7 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
         });
 
         // 写系统通知并实时广播，成员端同步展示
-        const operator = await getUserBrief(adminUserId);
+        const operator = await getUserBrief(tx, adminUserId);
         const payload = await pushSystemMessage(
           tx,
           roomId,
@@ -1143,14 +1070,13 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
       });
     },
 
-    /** 管理端房间详情（列表条目结构，含实时在线人数） */
+    /** 管理端房间详情（列表条目结构） */
     async adminGetRoom(roomId: string) {
       const room = await repo.findRoomById(roomId);
       if (!room) throw new RoomError('ROOM_NOT_FOUND', '房间不存在');
 
-      const [briefs, onlineUserIds, memberCount, video] = await Promise.all([
+      const [briefs, memberCount, video] = await Promise.all([
         repo.findUserBriefs([room.ownerId]),
-        conn.getRoomOnlineUsers(roomId),
         repo.countActiveMembers(db, roomId),
         room.currentVideoId ? repo.findPlayableVideo(room.currentVideoId) : null
       ]);
@@ -1169,7 +1095,6 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
           avatar: ownerBrief.avatar
         },
         memberCount,
-        onlineCount: onlineUserIds.length,
         maxMembers: room.maxMembers,
         isPlaying: room.isPlaying,
         currentVideo: video
@@ -1187,7 +1112,7 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
     },
 
     /**
-     * 管理端删除房间（硬删除，级联成员/消息/邀请凭证）。
+     * 管理端删除房间（硬删除，级联成员/消息）。
      * 开放中房间先广播 room:closed 让成员客户端退出，再删除记录。
      */
     async adminDeleteRoom(adminUserId: string, roomId: string) {
@@ -1195,7 +1120,7 @@ const createWatchRoomService = (fastify: FastifyInstance) => {
         const room = await repo.lockRoomById(tx, roomId);
         if (!room) throw new RoomError('ROOM_NOT_FOUND', '房间不存在');
 
-        const operator = await getUserBrief(adminUserId);
+        const operator = await getUserBrief(tx, adminUserId);
         await dissolveRoomTx(
           tx,
           roomId,
@@ -1216,6 +1141,10 @@ export default fp(
   },
   {
     name: 'watch-room-service',
-    dependencies: ['watch-room-repository', 'watch-room-connections']
+    dependencies: [
+      'watch-room-repository',
+      'watch-room-connections',
+      'rbac-middleware'
+    ]
   }
 );

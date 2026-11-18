@@ -9,6 +9,7 @@ import {
   UserInfoSchema
 } from '../../../schemas/auth.js';
 import { SuccessResponseSchema } from '../../../schemas/common.js';
+import { RoomError } from '../../../utils/watch-room.js';
 
 export default async function (fastify: FastifyInstance) {
   const {
@@ -138,8 +139,12 @@ export default async function (fastify: FastifyInstance) {
       try {
         await watchRoomService.leaveRoom(userId);
       } catch (error) {
-        // 不在房间内（ROOM_MEMBER_NOT_FOUND）属正常情况，仅记录日志
-        fastify.log.warn({ error }, 'Failed to leave watch room on logout');
+        // 不在房间内（ROOM_MEMBER_NOT_FOUND）属正常情况，不记录
+        const notInRoom =
+          error instanceof RoomError && error.code === 'ROOM_MEMBER_NOT_FOUND';
+        if (!notInRoom) {
+          fastify.log.warn({ error }, 'Failed to leave watch room on logout');
+        }
       }
 
       reply.clearCookie('session', { path: '/' });

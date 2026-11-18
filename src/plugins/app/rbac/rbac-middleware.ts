@@ -38,6 +38,10 @@ const createRbacMiddleware = () => {
    */
   const canAccessAdult = (role: string) => ADULT_ALLOWED_ROLES.includes(role);
 
+  /** 角色对应的排除类型（与 filterAdultTypes 同一规则） */
+  const excludeTypesFor = (role: string) =>
+    canAccessAdult(role) ? undefined : ADULT_EXCLUDED;
+
   /**
    * 角色等级判断（单一事实来源；未知角色视为等级不足）
    * 供 requireRoleAtLeast 与非 Fastify 上下文（Socket.IO 握手）复用
@@ -72,8 +76,7 @@ const createRbacMiddleware = () => {
     filterAdultTypes() {
       return async (request: FastifyRequest, reply: FastifyReply) => {
         if (!requireSession(request, reply)) return reply;
-        const allowed = canAccessAdult(request.sessionData!.role);
-        request.excludeTypes = allowed ? undefined : ADULT_EXCLUDED;
+        request.excludeTypes = excludeTypesFor(request.sessionData!.role);
       };
     },
 
@@ -81,6 +84,9 @@ const createRbacMiddleware = () => {
     isAdultAllowed(role: string) {
       return canAccessAdult(role);
     },
+
+    /** 角色对应的排除类型（非 Fastify 上下文复用，如 Socket.IO 事件） */
+    excludeTypesFor,
 
     /** 角色等级判断（非 Fastify 上下文复用，如 Socket.IO 握手） */
     hasRoleAtLeast

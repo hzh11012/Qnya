@@ -13,6 +13,7 @@ import {
   ilike,
   inArray,
   isNull,
+  notInArray,
   or,
   sql
 } from 'drizzle-orm';
@@ -20,10 +21,10 @@ import {
   usersTable,
   videosTable,
   animeTable,
-  watchRoomInvitesTable,
   watchRoomMembersTable,
   watchRoomMessagesTable,
-  watchRoomsTable
+  watchRoomsTable,
+  type AnimeType
 } from '../../../db/index.js';
 import type {
   AdminWatchRoomListQuery,
@@ -50,6 +51,13 @@ type DbExecutor = NodePgDatabase<typeof import('../../../db/index.js')> | Tx;
 
 const createWatchRoomRepository = (fastify: FastifyInstance) => {
   const db = fastify.db;
+
+  /** 房间 active 成员数子查询（大厅与管理端列表共用） */
+  const activeMemberCount = sql<number>`(
+    select count(*) from ${watchRoomMembersTable}
+    where ${watchRoomMembersTable.roomId} = ${watchRoomsTable.id}
+      and ${watchRoomMembersTable.status} = 'active'
+  )`;
 
   return {
     // ============================================
@@ -93,12 +101,30 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
       return room ?? null;
     },
 
-    /** 更新房间信息 */
+    /**
+     * 事务内按 id 顺序锁定多个房间行（跨房间操作统一加锁顺序：
+     * 两个事务以相反顺序锁同一对房间会被数据库判定死锁并回滚其一）
+     */
+    async lockRoomsByIds(tx: DbExecutor, roomIds: string[]) {
+      const rooms = await tx
+        .select()
+        .from(watchRoomsTable)
+        .where(inArray(watchRoomsTable.id, roomIds))
+        .orderBy(asc(watchRoomsTable.id))
+        .for('update');
+      return new Map(rooms.map(room => [room.id, room]));
+    },
+
+    /**
+     * 更新房间信息（必须传入持有房间行锁的事务：用 db 另开连接会等待
+     * 本事务的 FOR UPDATE 锁，而事务又在等它返回，形成数据库检测不到的死锁）
+     */
     async updateRoomInfo(
+      tx: DbExecutor,
       roomId: string,
       patch: Partial<{ name: string; announcement: string | null }>
     ) {
-      const [room] = await db
+      const [room] = await tx
         .update(watchRoomsTable)
         .set(patch)
         .where(eq(watchRoomsTable.id, roomId))
@@ -106,43 +132,34 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
       return room ?? null;
     },
 
-    /** 公开房间列表（分页 + 排序 + 搜索） */
-    async findPublicRooms(params: WatchRoomListQuery) {
-      const { page, pageSize, sort, order, keyword } = params;
+    /** 公开房间列表（分页，按创建时间倒序；excludeTypes 过滤当前视频所属动漫类型） */
+    async findPublicRooms(
+      params: WatchRoomListQuery,
+      excludeTypes: AnimeType[] | undefined
+    ) {
+      const { page, pageSize } = params;
 
       const conditions = [eq(watchRoomsTable.visibility, 'public')];
 
-      if (keyword) {
-        const simplified = t2s(keyword);
-        const escaped = `%${escapeLike(simplified)}%`;
-        // 同时匹配房间名称与当前观看动漫（繁简归一后 ILIKE）
+      // 观看者无权访问的类型（如 adult）：当前视频属于该类型的房间不出现在大厅
+      if (excludeTypes?.length) {
         conditions.push(
           or(
-            ilike(watchRoomsTable.name, escaped),
-            // 当前视频所属动漫名
-            sql`${watchRoomsTable.currentVideoId} in (
-              select ${videosTable.id} from ${videosTable}
-              inner join ${animeTable} on ${videosTable.animeId} = ${animeTable.id}
-              where ${ilike(animeTable.name, escaped)}
-            )`
+            isNull(watchRoomsTable.currentVideoId),
+            notInArray(
+              watchRoomsTable.currentVideoId,
+              db
+                .select({ id: videosTable.id })
+                .from(videosTable)
+                .innerJoin(animeTable, eq(videosTable.animeId, animeTable.id))
+                .where(inArray(animeTable.type, excludeTypes))
+            )
           )!
         );
       }
 
       const whereClause = and(...conditions);
 
-      // 在线人数排序：ORDER BY 引用查询输出的 memberCount 别名（含稳定 id tiebreaker）
-      const orderBy =
-        sort === 'online'
-          ? [
-              order === 'asc'
-                ? asc(sql`"memberCount"`)
-                : desc(sql`"memberCount"`),
-              order === 'asc'
-                ? asc(watchRoomsTable.id)
-                : desc(watchRoomsTable.id)
-            ]
-          : buildOrderBy(watchRoomsTable.createdAt, order, watchRoomsTable.id);
       const [items, countResult] = await Promise.all([
         db
           .select({
@@ -160,11 +177,7 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
             animeName: animeTable.name,
             animeCover: animeTable.cover,
             createdAt: watchRoomsTable.createdAt,
-            memberCount: sql<number>`(
-              select count(*) from ${watchRoomMembersTable}
-              where ${watchRoomMembersTable.roomId} = ${watchRoomsTable.id}
-                and ${watchRoomMembersTable.status} = 'active'
-            )`
+            memberCount: activeMemberCount
           })
           .from(watchRoomsTable)
           .innerJoin(usersTable, eq(watchRoomsTable.ownerId, usersTable.id))
@@ -174,7 +187,13 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
           )
           .leftJoin(animeTable, eq(videosTable.animeId, animeTable.id))
           .where(whereClause)
-          .orderBy(...orderBy)
+          .orderBy(
+            ...buildOrderBy(
+              watchRoomsTable.createdAt,
+              'desc',
+              watchRoomsTable.id
+            )
+          )
           .limit(pageSize)
           .offset(calcOffset(page, pageSize)),
         db.select({ count: count() }).from(watchRoomsTable).where(whereClause)
@@ -221,11 +240,7 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
             animeName: animeTable.name,
             animeCover: animeTable.cover,
             createdAt: watchRoomsTable.createdAt,
-            memberCount: sql<number>`(
-              select count(*) from ${watchRoomMembersTable}
-              where ${watchRoomMembersTable.roomId} = ${watchRoomsTable.id}
-                and ${watchRoomMembersTable.status} = 'active'
-            )`
+            memberCount: activeMemberCount
           })
           .from(watchRoomsTable)
           .innerJoin(usersTable, eq(watchRoomsTable.ownerId, usersTable.id))
@@ -254,7 +269,7 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
       return { items, total: Number(countResult[0]?.count ?? 0) };
     },
 
-    /** 硬删除房间（级联成员/消息/邀请凭证） */
+    /** 硬删除房间（级联成员/消息） */
     async deleteRoom(tx: DbExecutor, roomId: string) {
       const [deleted] = await tx
         .delete(watchRoomsTable)
@@ -274,7 +289,7 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
     ) {
       const [member] = await tx
         .insert(watchRoomMembersTable)
-        .values({ ...data, lastSeenAt: new Date() })
+        .values(data)
         .returning();
       return member;
     },
@@ -335,18 +350,19 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
         );
     },
 
-    /** 房间内 active 成员 userId 列表（解散清理用） */
-    async findRoomMemberUserIds(tx: DbExecutor, roomId: string) {
+    /** 房间 active 成员的账号角色（切换视频时校验全员可观看） */
+    async findActiveMemberRoles(tx: DbExecutor, roomId: string) {
       const rows = await tx
-        .select({ userId: watchRoomMembersTable.userId })
+        .select({ role: usersTable.role })
         .from(watchRoomMembersTable)
+        .innerJoin(usersTable, eq(watchRoomMembersTable.userId, usersTable.id))
         .where(
           and(
             eq(watchRoomMembersTable.roomId, roomId),
             eq(watchRoomMembersTable.status, 'active')
           )
         );
-      return rows.map(r => r.userId);
+      return rows.map(r => r.role);
     },
 
     /**
@@ -369,82 +385,6 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
         )
         .returning();
       return member ?? null;
-    },
-
-    // ============================================
-    // 邀请凭证
-    // ============================================
-
-    /** 创建邀请凭证（新凭证创建前撤销该房间全部旧凭证） */
-    async createInvite(
-      tx: DbExecutor,
-      data: {
-        roomId: string;
-        tokenHash: string;
-        createdBy: string;
-        expiresAt: Date | null;
-      }
-    ) {
-      await tx
-        .update(watchRoomInvitesTable)
-        .set({ revokedAt: new Date() })
-        .where(
-          and(
-            eq(watchRoomInvitesTable.roomId, data.roomId),
-            isNull(watchRoomInvitesTable.revokedAt)
-          )
-        );
-
-      const [invite] = await tx
-        .insert(watchRoomInvitesTable)
-        .values(data)
-        .returning();
-      return invite;
-    },
-
-    /** 校验邀请凭证（房间维度，未撤销未过期） */
-    async findValidInvite(tx: DbExecutor, roomId: string, tokenHash: string) {
-      const conditions = [
-        eq(watchRoomInvitesTable.roomId, roomId),
-        eq(watchRoomInvitesTable.tokenHash, tokenHash),
-        isNull(watchRoomInvitesTable.revokedAt)
-      ];
-
-      const [invite] = await tx
-        .select()
-        .from(watchRoomInvitesTable)
-        .where(and(...conditions))
-        .limit(1);
-
-      if (!invite) return { expired: false as const, invite: null };
-      if (invite.expiresAt && invite.expiresAt.getTime() < Date.now()) {
-        return { expired: true as const, invite: null };
-      }
-      return { expired: false as const, invite };
-    },
-
-    /**
-     * 邀请链接直连：按凭证哈希解析房间（凭证哈希全局唯一）。
-     * @returns roomId 或具体错误（无效/已撤销/已过期）
-     */
-    async resolveInviteToken(tokenHash: string) {
-      const [invite] = await db
-        .select({
-          roomId: watchRoomInvitesTable.roomId,
-          revokedAt: watchRoomInvitesTable.revokedAt,
-          expiresAt: watchRoomInvitesTable.expiresAt
-        })
-        .from(watchRoomInvitesTable)
-        .where(eq(watchRoomInvitesTable.tokenHash, tokenHash))
-        .limit(1);
-
-      if (!invite || invite.revokedAt) {
-        return { ok: false as const, roomId: null };
-      }
-      if (invite.expiresAt && invite.expiresAt.getTime() < Date.now()) {
-        return { ok: false as const, roomId: null, expired: true as const };
-      }
-      return { ok: true as const, roomId: invite.roomId };
     },
 
     // ============================================
@@ -492,7 +432,11 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
             eq(watchRoomMessagesTable.userId, usersTable.id)
           )
           .where(eq(watchRoomMessagesTable.roomId, roomId))
-          .orderBy(desc(watchRoomMessagesTable.createdAt))
+          // id（uuidv7）作稳定 tiebreaker，同一时间戳的消息翻页不重复/不遗漏
+          .orderBy(
+            desc(watchRoomMessagesTable.createdAt),
+            desc(watchRoomMessagesTable.id)
+          )
           .limit(pageSize)
           .offset(calcOffset(page, pageSize)),
         db
@@ -508,8 +452,11 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
     // 视频 / 用户
     // ============================================
 
-    /** 校验视频可播放（视频存在且所属动漫非 draft） */
-    async findPlayableVideo(videoId: string) {
+    /**
+     * 校验视频可播放（视频存在且所属动漫非 draft；
+     * excludeTypes 为操作者无权访问的类型，命中视为不可播放）
+     */
+    async findPlayableVideo(videoId: string, excludeTypes?: AnimeType[]) {
       const [video] = await db
         .select({
           videoId: videosTable.id,
@@ -518,7 +465,8 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
           animeId: animeTable.id,
           animeName: animeTable.name,
           animeCover: animeTable.cover,
-          animeStatus: animeTable.status
+          animeStatus: animeTable.status,
+          animeType: animeTable.type
         })
         .from(videosTable)
         .innerJoin(animeTable, eq(videosTable.animeId, animeTable.id))
@@ -527,13 +475,22 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
 
       if (!video) return null;
       if (video.animeStatus === 'draft') return null;
+      if (excludeTypes?.includes(video.animeType)) return null;
       return video;
     },
 
-    /** 视频是否可播放（事务内校验用） */
-    async isVideoPlayable(tx: DbExecutor, videoId: string) {
+    /** 视频是否可播放（事务内校验用；excludeTypes 同 findPlayableVideo） */
+    async isVideoPlayable(
+      tx: DbExecutor,
+      videoId: string,
+      excludeTypes?: AnimeType[]
+    ) {
       const [video] = await tx
-        .select({ id: videosTable.id, animeStatus: animeTable.status })
+        .select({
+          id: videosTable.id,
+          animeStatus: animeTable.status,
+          animeType: animeTable.type
+        })
         .from(videosTable)
         .innerJoin(animeTable, eq(videosTable.animeId, animeTable.id))
         .where(eq(videosTable.id, videoId))
@@ -541,14 +498,19 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
 
       if (!video) return null;
       if (video.animeStatus === 'draft') return null;
+      if (excludeTypes?.includes(video.animeType)) return null;
       return video;
     },
 
-    /** 用户简要信息（邀请通知 / 状态展示用） */
-    async findUserBriefs(userIds: string[]) {
+    /**
+     * 用户简要信息（系统通知 / 状态展示用）。
+     * 事务内调用必须传入事务执行器：用 db 会再占一条连接，高并发时可能耗尽连接池
+     */
+    async findUserBriefs(userIds: string[], executor?: DbExecutor) {
       if (userIds.length === 0)
         return new Map<string, { nickname: string; avatar: string | null }>();
-      const rows = await db
+      const runner = executor ?? db;
+      const rows = await runner
         .select({
           id: usersTable.id,
           nickname: usersTable.name,

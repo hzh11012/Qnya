@@ -87,10 +87,6 @@ export const watchRoomMembersTable = pgTable(
     role: watchRoomMemberRoleEnum().notNull().default('member'),
     /** 状态：active 在房（单会话模型：在房即连接中）/ left 离开（含断开退出）/ kicked 被移出 */
     status: watchRoomMemberStatusEnum().notNull().default('active'),
-    /** 最后在线时间 */
-    lastSeenAt: timestamp('last_seen_at', { withTimezone: true, mode: 'date' })
-      .notNull()
-      .defaultNow(),
     ...timestamps
   },
   table => [
@@ -100,33 +96,6 @@ export const watchRoomMembersTable = pgTable(
     uniqueIndex('uq_watch_room_members_active_user')
       .on(table.userId)
       .where(sql`status = 'active'`)
-  ]
-);
-
-/** 放映室邀请凭证表 */
-export const watchRoomInvitesTable = pgTable(
-  'watch_room_invites',
-  {
-    id: idColumn(),
-    /** 房间ID */
-    roomId: uuid('room_id')
-      .notNull()
-      .references(() => watchRoomsTable.id, { onDelete: 'cascade' }),
-    /** 凭证 SHA-256 哈希（不存明文） */
-    tokenHash: varchar('token_hash', { length: 64 }).notNull(),
-    /** 过期时间（null = 永不过期） */
-    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }),
-    /** 创建者（房主） */
-    createdBy: uuid('created_by')
-      .notNull()
-      .references(() => usersTable.id, { onDelete: 'cascade' }),
-    /** 撤销时间（重新生成后旧凭证立即失效） */
-    revokedAt: timestamp('revoked_at', { withTimezone: true, mode: 'date' }),
-    ...timestamps
-  },
-  table => [
-    uniqueIndex('uq_watch_room_invites_token_hash').on(table.tokenHash),
-    index('watch_room_invites_room_idx').on(table.roomId)
   ]
 );
 

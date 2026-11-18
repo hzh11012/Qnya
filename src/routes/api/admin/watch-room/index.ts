@@ -5,6 +5,7 @@ import {
   AdminWatchRoomListItemSchema,
   AdminWatchRoomListQuerySchema,
   AdminWatchRoomUpdateSchema,
+  withRoomErrors,
   type AdminWatchRoomListQuery,
   type WatchRoomUpdateInput
 } from '../../../../schemas/watch-room.js';
@@ -63,9 +64,7 @@ export default async function (fastify: FastifyInstance) {
       schema: {
         params: z.object({ roomId: IdSchema }),
         body: AdminWatchRoomUpdateSchema,
-        response: {
-          200: SuccessResponseSchema(AdminWatchRoomListItemSchema)
-        }
+        response: withRoomErrors(AdminWatchRoomListItemSchema)
       }
     },
     async (request, reply) => {
@@ -90,9 +89,7 @@ export default async function (fastify: FastifyInstance) {
       preHandler: adminOnly,
       schema: {
         params: z.object({ roomId: IdSchema }),
-        response: {
-          200: SuccessResponseSchema(z.object({ roomId: IdSchema }))
-        }
+        response: withRoomErrors(z.object({ roomId: IdSchema }))
       }
     },
     async (request, reply) => {

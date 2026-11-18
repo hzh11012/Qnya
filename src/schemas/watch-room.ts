@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { IdSchema, PaginationQuerySchema } from './common.js';
+import {
+  IdSchema,
+  PaginationQuerySchema,
+  SuccessResponseSchema
+} from './common.js';
 
 // ============================================
 // 系统事件类型（watch_room_messages.event_type）
@@ -10,7 +14,6 @@ export const WATCH_ROOM_EVENT_TYPES = [
   'member_left',
   'member_switched',
   'member_kicked',
-  'member_invited',
   'room_updated',
   'room_closed'
 ] as const;
@@ -23,20 +26,18 @@ export type WatchRoomEventType = (typeof WATCH_ROOM_EVENT_TYPES)[number];
 
 export const WATCH_ROOM_ERROR_CODES = [
   'ROOM_NOT_FOUND',
-  'ROOM_CLOSED',
   'ROOM_FULL',
   'ROOM_PRIVATE',
-  'INVITE_INVALID',
-  'INVITE_EXPIRED',
   'ROOM_PASSWORD_INVALID',
   'ROOM_PERMISSION_DENIED',
   'ROOM_MEMBER_NOT_FOUND',
-  'ROOM_ALREADY_JOINED',
   'ROOM_SWITCH_FAILED',
   'VIDEO_NOT_FOUND',
   'VIDEO_UNAVAILABLE',
   'SESSION_INVALID',
-  'RATE_LIMITED'
+  'RATE_LIMITED',
+  'INVALID_PARAMS',
+  'INTERNAL_ERROR'
 ] as const;
 
 export type WatchRoomErrorCode = (typeof WATCH_ROOM_ERROR_CODES)[number];
@@ -44,21 +45,40 @@ export type WatchRoomErrorCode = (typeof WATCH_ROOM_ERROR_CODES)[number];
 /** 错误码 → HTTP 状态码映射 */
 export const WATCH_ROOM_ERROR_STATUS: Record<WatchRoomErrorCode, number> = {
   ROOM_NOT_FOUND: 404,
-  ROOM_CLOSED: 409,
   ROOM_FULL: 409,
   ROOM_PRIVATE: 403,
-  INVITE_INVALID: 403,
-  INVITE_EXPIRED: 403,
   ROOM_PASSWORD_INVALID: 403,
   ROOM_PERMISSION_DENIED: 403,
   ROOM_MEMBER_NOT_FOUND: 404,
-  ROOM_ALREADY_JOINED: 200,
   ROOM_SWITCH_FAILED: 409,
   VIDEO_NOT_FOUND: 404,
   VIDEO_UNAVAILABLE: 409,
   SESSION_INVALID: 401,
-  RATE_LIMITED: 429
+  RATE_LIMITED: 429,
+  INVALID_PARAMS: 400,
+  INTERNAL_ERROR: 500
 };
+
+/**
+ * 错误响应（OpenAPI 文档用）：业务错误附带 errorCode 供前端区分处理；
+ * 框架层错误（未登录 / 参数校验 / 限流）只有 code 与 message
+ */
+export const WatchRoomErrorResponseSchema = z.object({
+  code: z.number(),
+  message: z.string(),
+  errorCode: z.enum(WATCH_ROOM_ERROR_CODES).optional()
+});
+
+/** 放映室接口响应声明：200 成功结构 + 各错误状态码的错误结构 */
+export const withRoomErrors = <T extends z.ZodTypeAny>(data: T) => ({
+  200: SuccessResponseSchema(data),
+  400: WatchRoomErrorResponseSchema,
+  401: WatchRoomErrorResponseSchema,
+  403: WatchRoomErrorResponseSchema,
+  404: WatchRoomErrorResponseSchema,
+  409: WatchRoomErrorResponseSchema,
+  429: WatchRoomErrorResponseSchema
+});
 
 // ============================================
 // 请求 Schema
@@ -75,69 +95,56 @@ export const WatchRoomCreateSchema = z.object({
     .max(100, '房间名称最多 100 字'),
   visibility: WatchRoomVisibilitySchema,
   announcement: z.string().trim().max(500, '公告最多 500 字').optional(),
-  /** 仅私人房间可设置密码 */
+  /** 私人房间密码（私人房间必填，公开房间不可设置） */
   password: z
     .string()
     .min(4, '密码至少 4 位')
     .max(32, '密码最多 32 位')
     .optional(),
-  /** 初始视频 */
-  videoId: IdSchema.optional()
+  /** 初始视频（必选：先选番剧再选集） */
+  videoId: IdSchema
 });
 
 export type WatchRoomCreateInput = z.infer<typeof WatchRoomCreateSchema>;
 
-/** 公开房间列表查询 */
+/** 公开房间列表查询（按创建时间倒序分页） */
 export const WatchRoomListQuerySchema = z.object({
-  ...PaginationQuerySchema,
-  /** online 按在线人数排序 / createdAt 按创建时间排序 */
-  sort: z.enum(['online', 'createdAt']).default('createdAt'),
-  order: z.enum(['asc', 'desc']).default('desc'),
-  /** 房间名称 / 当前观看动漫搜索 */
-  keyword: z.string().trim().max(100).optional()
+  ...PaginationQuerySchema
 });
 
 export type WatchRoomListQuery = z.infer<typeof WatchRoomListQuerySchema>;
 
 /** 加入房间 */
 export const WatchRoomJoinSchema = z.object({
-  /** 私人房间邀请凭证（邀请链接 / 邀请码中的 token） */
-  inviteToken: z.string().trim().min(10).max(128).optional(),
   /** 私人房间密码 */
   password: z.string().max(32).optional()
 });
 
 export type WatchRoomJoinInput = z.infer<typeof WatchRoomJoinSchema>;
 
+/** 修改房间信息字段（HTTP 与 Socket 共用） */
+const WatchRoomUpdateShape = {
+  name: z
+    .string()
+    .trim()
+    .min(1, '房间名称不能为空')
+    .max(100, '房间名称最多 100 字')
+    .optional(),
+  announcement: z.string().trim().max(500, '公告最多 500 字').optional()
+};
+
+const hasUpdateField = (data: { name?: string; announcement?: string }) =>
+  data.name !== undefined || data.announcement !== undefined;
+
 /** 修改房间信息（房主） */
 export const WatchRoomUpdateSchema = z
-  .object({
-    name: z
-      .string()
-      .trim()
-      .min(1, '房间名称不能为空')
-      .max(100, '房间名称最多 100 字')
-      .optional(),
-    announcement: z.string().trim().max(500, '公告最多 500 字').optional()
-  })
-  .refine(data => data.name !== undefined || data.announcement !== undefined, {
-    message: '至少修改一项内容'
-  });
+  .object(WatchRoomUpdateShape)
+  .refine(hasUpdateField, { message: '至少修改一项内容' });
 
 export type WatchRoomUpdateInput = z.infer<typeof WatchRoomUpdateSchema>;
 
 /** 踢出成员 */
 export const WatchRoomKickSchema = z.object({ userId: IdSchema });
-
-/** 创建邀请 */
-export const WatchRoomInviteSchema = z.object({
-  /** 被邀请用户（可选：生成邀请通知，仅代表邀请已发出） */
-  userId: IdSchema.optional(),
-  /** 凭证有效期（天，可选：不传 = 永不过期） */
-  expiresInDays: z.coerce.number().int().min(1).max(365).optional()
-});
-
-export type WatchRoomInviteInput = z.infer<typeof WatchRoomInviteSchema>;
 
 /** 发送聊天消息 */
 export const WatchRoomChatSchema = z.object({
@@ -154,6 +161,55 @@ export type WatchRoomChatInput = z.infer<typeof WatchRoomChatSchema>;
 export const WatchRoomMessageQuerySchema = z.object({
   ...PaginationQuerySchema
 });
+
+// ============================================
+// Socket 事件载荷 Schema（Socket.IO 不经过 Fastify 校验，事件处理器内显式解析）
+// ============================================
+
+const SocketRoomIdShape = { roomId: IdSchema };
+
+/** 播放位置（秒）：上限 7 天，拒绝 NaN/Infinity/负数 */
+const PlaybackPositionSchema = z
+  .number()
+  .min(0)
+  .max(86400 * 7);
+
+/** 仅携带 roomId 的事件（room:close / playback:pause） */
+export const WatchRoomSocketRoomSchema = z.object(SocketRoomIdShape);
+
+export const WatchRoomSocketJoinSchema =
+  WatchRoomJoinSchema.extend(SocketRoomIdShape);
+
+/** room:leave：roomId 可选（不传 = 离开当前所在房间） */
+export const WatchRoomSocketLeaveSchema = z.object({
+  roomId: IdSchema.optional()
+});
+
+export const WatchRoomSocketUpdateSchema = z
+  .object({ ...SocketRoomIdShape, ...WatchRoomUpdateShape })
+  .refine(hasUpdateField, { message: '至少修改一项内容' });
+
+export const WatchRoomSocketKickSchema =
+  WatchRoomKickSchema.extend(SocketRoomIdShape);
+
+/** playback:play：附带 position 时从该位置开始播放 */
+export const WatchRoomSocketPlaySchema = z.object({
+  ...SocketRoomIdShape,
+  position: PlaybackPositionSchema.optional()
+});
+
+export const WatchRoomSocketSeekSchema = z.object({
+  ...SocketRoomIdShape,
+  position: PlaybackPositionSchema
+});
+
+export const WatchRoomSocketChangeVideoSchema = z.object({
+  ...SocketRoomIdShape,
+  videoId: IdSchema
+});
+
+export const WatchRoomSocketChatSchema =
+  WatchRoomChatSchema.extend(SocketRoomIdShape);
 
 // ============================================
 // 响应 Schema
@@ -234,7 +290,6 @@ export const WatchRoomDetailSchema = z.object({
   visibility: WatchRoomVisibilitySchema,
   ownerId: IdSchema,
   owner: WatchRoomUserBriefSchema,
-  onlineCount: z.number(),
   memberCount: z.number(),
   maxMembers: z.number(),
   playback: WatchRoomPlaybackSchema,
@@ -261,7 +316,6 @@ export const WatchRoomListItemSchema = z.object({
   name: z.string(),
   ownerId: IdSchema,
   owner: WatchRoomUserBriefSchema,
-  onlineCount: z.number(),
   memberCount: z.number(),
   maxMembers: z.number(),
   isPlaying: z.boolean(),
@@ -270,16 +324,6 @@ export const WatchRoomListItemSchema = z.object({
 });
 
 export type WatchRoomListItem = z.infer<typeof WatchRoomListItemSchema>;
-
-/** 邀请凭证 */
-export const WatchRoomInviteSchemaResponse = z.object({
-  roomId: IdSchema,
-  /** 明文凭证（仅创建时返回一次，数据库只存哈希） */
-  token: z.string(),
-  /** 邀请链接（相对路径，域名由前端自行拼接） */
-  inviteUrl: z.string(),
-  expiresAt: z.date().nullable()
-});
 
 // ============================================
 // 后台管理（admin）Schema
@@ -306,7 +350,6 @@ export const AdminWatchRoomListItemSchema = z.object({
   ownerId: IdSchema,
   owner: WatchRoomUserBriefSchema,
   memberCount: z.number(),
-  onlineCount: z.number(),
   maxMembers: z.number(),
   isPlaying: z.boolean(),
   currentVideo: WatchRoomVideoSchema.nullable(),

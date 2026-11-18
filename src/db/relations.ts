@@ -13,7 +13,6 @@ import { videosTable } from './videos/index.js';
 import { danmakuTable } from './danmaku/index.js';
 import { historiesTable } from './histories/index.js';
 import {
-  watchRoomInvitesTable,
   watchRoomMembersTable,
   watchRoomMessagesTable,
   watchRoomsTable
@@ -234,8 +233,6 @@ export const watchRoomsRelations = relations(
     }),
     /** 成员记录（1 — N：一个房间有多名成员） */
     members: many(watchRoomMembersTable),
-    /** 邀请凭证（1 — N：一个房间可先后生成多个凭证） */
-    invites: many(watchRoomInvitesTable),
     /** 消息（1 — N：聊天与系统通知） */
     messages: many(watchRoomMessagesTable)
   })
@@ -253,23 +250,6 @@ export const watchRoomMembersRelations = relations(
     /** 成员用户（N — 1：成员记录 → 用户；同一用户可有多条历史记录，同时至多一条 active） */
     user: one(usersTable, {
       fields: [watchRoomMembersTable.userId],
-      references: [usersTable.id]
-    })
-  })
-);
-
-/** 放映室邀请凭证表关系 */
-export const watchRoomInvitesRelations = relations(
-  watchRoomInvitesTable,
-  ({ one }) => ({
-    /** 所属房间（N — 1：凭证 → 房间） */
-    room: one(watchRoomsTable, {
-      fields: [watchRoomInvitesTable.roomId],
-      references: [watchRoomsTable.id]
-    }),
-    /** 创建者（N — 1：凭证 → 用户，即生成凭证时的房主） */
-    creator: one(usersTable, {
-      fields: [watchRoomInvitesTable.createdBy],
       references: [usersTable.id]
     })
   })
