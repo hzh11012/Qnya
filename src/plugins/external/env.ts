@@ -15,6 +15,8 @@ declare module 'fastify' {
       ADMIN_EMAIL: string;
       RATE_LIMIT_MAX: number;
       CORS_ORIGINS: string;
+      /** 生产环境是否把 5xx 真实错误返回给客户端（排障用，默认 false） */
+      EXPOSE_ERROR_DETAIL: boolean;
       // Database pool configuration
       DB_POOL_MAX: number;
       DB_POOL_IDLE_TIMEOUT: number;
@@ -100,6 +102,8 @@ const schema = {
     // Security
     RATE_LIMIT_MAX: { type: 'number', default: 100 },
     CORS_ORIGINS: { type: 'string', default: '' },
+    // 5xx 响应是否透出真实错误：默认 false，避免泄露表名/约束名等内部细节
+    EXPOSE_ERROR_DETAIL: { type: 'boolean', default: false },
     // SMTP
     SMTP_HOST: { type: 'string' },
     SMTP_PORT: { type: 'number', default: 465 },

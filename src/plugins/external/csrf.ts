@@ -5,6 +5,29 @@ import csrf from '@fastify/csrf-protection';
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /**
+ * 免校验的写接口（精确路径）：
+ * - send-code / login：尚未建立会话，不存在可被冒用的身份
+ * - webhook：qBittorrent 用 secret 鉴权，且由本机 curl 触发
+ */
+const EXEMPT_PATHS = new Set([
+  '/api/webhook/qbit',
+  '/api/auth/send-code',
+  '/api/auth/login'
+]);
+
+/** MCP 是 Streamable HTTP，子路径由协议决定，按前缀豁免（Bearer Token 鉴权） */
+const EXEMPT_PREFIXES = ['/api/mcp'];
+
+/** 只比对 path（忽略 query），避免 `?x=1` 影响命中 */
+const isExempt = (url: string) => {
+  const path = url.split('?')[0] ?? url;
+  return (
+    EXEMPT_PATHS.has(path) ||
+    EXEMPT_PREFIXES.some(p => path === p || path.startsWith(`${p}/`))
+  );
+};
+
+/**
  * CSRF protection plugin
  *
  * 工作机制：
@@ -44,17 +67,9 @@ const csrfPlugin = async (fastify: FastifyInstance) => {
   };
 
   fastify.addHook('onRequest', (request, reply, done) => {
-    // 跳过 webhook、认证相关接口以及 MCP 接口（Bearer Token 鉴权，无需 CSRF）的 CSRF 检查
-    if (
-      ['/api/webhook/', '/api/auth/', '/api/mcp'].some(p =>
-        request.url.startsWith(p)
-      )
-    ) {
-      return done();
-    }
-
-    if (SAFE_METHODS.has(request.method)) {
-      // 安全方法：生成 Token 并种 XSRF-TOKEN Cookie，供后续写操作使用
+    // 安全方法与豁免接口都下发 token：登录响应即带上 XSRF-TOKEN，
+    // 客户端登录后可直接写操作（logout、PATCH /auth/me 不再豁免）
+    if (isExempt(request.url) || SAFE_METHODS.has(request.method)) {
       const token = reply.generateCsrf();
       reply.setCookie('XSRF-TOKEN', token, xsrfCookieOpts);
       return done();

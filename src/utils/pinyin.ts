@@ -14,15 +14,16 @@ export function toInitials(name: string): string {
 }
 
 /** HTML 转义，防止名称/关键词中的字符被当作 HTML 渲染（XSS） */
+const HTML_ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;'
+};
+
 export function escapeHtml(text: string): string {
-  return text.replace(
-    /[&<>"']/g,
-    ch =>
-      ({
-        '<': '&lt;',
-        '>': '&gt;'
-      })[ch]!
-  );
+  return text.replace(/[&<>"']/g, ch => HTML_ESCAPES[ch]);
 }
 
 /**
