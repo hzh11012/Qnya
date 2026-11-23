@@ -1,6 +1,6 @@
 import { bigint, index, integer, pgTable, varchar } from 'drizzle-orm/pg-core';
 import { idColumn, timestamps } from '../columns.helpers.js';
-import { taskStatusEnum } from './enum.js';
+import { taskStatusEnum } from './enums.js';
 
 /** 任务表 */
 export const tasksTable = pgTable(

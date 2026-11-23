@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
-import { QBitClient } from './qbit-client.js';
+import { QBitClient } from './internal/qbit-client.js';
 
 declare module 'fastify' {
   export interface FastifyInstance {

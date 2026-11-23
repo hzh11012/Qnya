@@ -58,11 +58,13 @@ const buildApp = async (
     options: { ...opts }
   });
 
-  // 加载应用库
+  // 加载应用库。约定：plugins/app 下的每个文件都必须是 fp 插件（导出 decorate 用的能力），
+  // 领域内部的纯实现模块放进 <domain>/internal/；autoload 会逐个 require 文件探测插件形状，
+  // 非插件文件只会得到一条 debug 级的 skip 日志，因此这里整目录忽略，避免噪音
   await fastify.register(AutoLoad, {
     dir: join(import.meta.dirname, '../plugins/app'),
     options: { ...opts },
-    ignorePattern: /.*-client\.ts$/
+    ignorePattern: /^internal$/
   });
 
   // 加载路由
