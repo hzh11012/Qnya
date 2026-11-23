@@ -21,6 +21,12 @@ import {
 } from './enums.js';
 
 /**
+ * 房间人数上限（默认值）：建房时固定按此值写入，不开放给客户端指定，
+ * 后续也没有任何接口可修改。字段保留是为了兼容历史房间的旧上限。
+ */
+export const WATCH_ROOM_MAX_MEMBERS = 5;
+
+/**
  * 放映室表：房间存在即开放，解散直接硬删除
  * （历史消息/成员随房间级联删除，无软关闭保留期）
  */
@@ -40,8 +46,10 @@ export const watchRoomsTable = pgTable(
     visibility: watchRoomVisibilityEnum().notNull(),
     /** 房间密码哈希（scrypt，仅私人房间可选） */
     passwordHash: text('password_hash'),
-    /** 最大成员数 */
-    maxMembers: integer('max_members').notNull().default(20),
+    /** 最大成员数（建房时固定 5 人，不开放修改） */
+    maxMembers: integer('max_members')
+      .notNull()
+      .default(WATCH_ROOM_MAX_MEMBERS),
     /** 当前播放视频ID */
     currentVideoId: uuid('current_video_id').references(() => videosTable.id, {
       onDelete: 'set null'
@@ -126,5 +134,29 @@ export const watchRoomMessagesTable = pgTable(
       table.roomId,
       table.createdAt
     )
+  ]
+);
+
+/**
+ * 放映室黑名单：被房主移出的成员记录在案，该房间从此拒绝其加入。
+ * 房间解散时级联删除（房间不跨进程存活，黑名单也随之失效）。
+ */
+export const watchRoomBansTable = pgTable(
+  'watch_room_bans',
+  {
+    id: idColumn(),
+    /** 房间ID */
+    roomId: uuid('room_id')
+      .notNull()
+      .references(() => watchRoomsTable.id, { onDelete: 'cascade' }),
+    /** 被移出的用户ID */
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => usersTable.id, { onDelete: 'cascade' }),
+    ...timestamps
+  },
+  table => [
+    // 同一房间对同一用户只留一条（重复移出幂等）
+    uniqueIndex('uq_watch_room_bans_room_user').on(table.roomId, table.userId)
   ]
 );

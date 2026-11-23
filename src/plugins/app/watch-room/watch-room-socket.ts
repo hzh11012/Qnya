@@ -26,6 +26,7 @@ import type { SessionData } from '../auth/session-repository.js';
  * - 握手时校验 Session Cookie（复用现有登录体系，不引入 JWT）
  * - 每个事件重新校验会话、校验载荷并限流；同一连接的事件串行执行
  * - 单会话模型：账号唯一，新连接顶替旧连接
+ * - 断线保留 30s 宽限期（网络闪断/刷新不散房），超时才真正离开
  * - 关键操作全部走 ACK 确认：{ success, data, error }
  */
 declare module 'fastify' {
@@ -55,6 +56,13 @@ type Ack = (result: AckResult) => void;
 
 /** 事件频率限制（单实例内存滑动窗口，按用户计数） */
 const RATE_LIMIT_WINDOW_MS = 60_000;
+
+/**
+ * 断线宽限期（ms）：连接异常断开后先保留席位，等客户端 Socket.IO 自动重连。
+ * 网络闪断、手机切网、页面刷新都不该让房主掉线即散房；超时未回来才真正离开。
+ * 前端 room.tsx 的 RECONNECT_GRACE_MS 与此对齐。
+ */
+const DISCONNECT_GRACE_MS = 30_000;
 
 class SlidingWindowLimiter {
   private hits = new Map<string, number[]>();
@@ -122,6 +130,20 @@ const registerWatchRoomSocket = async (fastify: FastifyInstance) => {
     }
   });
 
+  /**
+   * 待执行的断线离开（userId → 定时器）。重连、主动离开都会取消。
+   * 与限流一样是单实例内存实现：多实例部署需换成 Redis 延迟队列，
+   * 否则宽限期只在接住该连接的那个实例上有效。
+   */
+  const pendingLeaves = new Map<string, NodeJS.Timeout>();
+
+  const cancelPendingLeave = (userId: string) => {
+    const timer = pendingLeaves.get(userId);
+    if (!timer) return;
+    clearTimeout(timer);
+    pendingLeaves.delete(userId);
+  };
+
   conn.setIo(io);
   fastify.decorate('watchRoomIo', io);
 
@@ -150,6 +172,15 @@ const registerWatchRoomSocket = async (fastify: FastifyInstance) => {
 
   io.use(async (socket, next) => {
     try {
+      // 白名单非空时显式校验 Origin：engine.io 的 cors 只作用于 HTTP 轮询，
+      // 直连 wss 的 upgrade 不会命中，靠这一条挡住跨站 WebSocket 劫持（CSWSH）。
+      // 非浏览器客户端不带 Origin，放行。
+      const origin = socket.handshake.headers.origin;
+      if (origin && corsAllowList.size > 0 && !corsAllowList.has(origin)) {
+        fastify.log.warn({ origin }, 'watch-room socket origin rejected');
+        return next(new Error('SESSION_INVALID'));
+      }
+
       const cookieHeader = socket.handshake.headers.cookie;
       if (!cookieHeader) return next(new Error('SESSION_INVALID'));
 
@@ -185,7 +216,7 @@ const registerWatchRoomSocket = async (fastify: FastifyInstance) => {
   });
 
   // ============================================
-  // 连接生命周期（单会话 + 断开即离开）
+  // 连接生命周期（单会话 + 断线宽限期）
   // ============================================
 
   /**
@@ -195,10 +226,21 @@ const registerWatchRoomSocket = async (fastify: FastifyInstance) => {
    */
   const attachSocketToCurrentRoom = async (socket: Socket) => {
     const userId = socket.data.userId as string;
-    const state = await service.getCurrentRoom(
-      userId,
-      rbac.excludeTypesFor(socket.data.role as string)
-    );
+    let state: Awaited<ReturnType<typeof service.getCurrentRoom>>;
+    try {
+      state = await service.getCurrentRoom(
+        userId,
+        rbac.excludeTypesFor(socket.data.role as string)
+      );
+    } catch (error) {
+      // 连接初始化期间房间刚好被解散/删除：照「不在任何房间」处理，
+      // 否则客户端既收不到 room:state 也不知道房间没了，会一直卡在房间页
+      if (error instanceof RoomError) {
+        socket.emit('room:state', { roomId: null, state: null });
+        return;
+      }
+      throw error;
+    }
     if (!state) {
       socket.emit('room:state', { roomId: null, state: null });
       return;
@@ -217,6 +259,9 @@ const registerWatchRoomSocket = async (fastify: FastifyInstance) => {
       { userId, socketId: socket.id },
       'watch-room socket connected'
     );
+
+    // 宽限期内重连：撤销待执行的离开，席位与播放状态原样保留
+    cancelPendingLeave(userId);
 
     // 会话接管：账号唯一，新连接顶替旧连接。先同步加入 `user:` 房间再断开旧连接，
     // 旧连接的断开处理据此识别"已被顶替"而跳过离开逻辑；
@@ -245,14 +290,29 @@ const registerWatchRoomSocket = async (fastify: FastifyInstance) => {
       });
     };
 
-    // 断开即离开：房主断开 → 解散；成员断开 → 退出房间。
-    // 网络断开与主动离开同等处理（会话唯一，不做多设备保护）
+    // 断线进入宽限期：期间席位不动（成员列表不变），客户端重连后由
+    // attachSocketToCurrentRoom 重新补齐状态；超时未回来才真正离开。
+    // 房主超时 → 解散；普通成员超时 → 退出。
     socket.on('disconnect', () => {
-      enqueue('disconnect leave', async () => {
-        // 会话已被新连接顶替：房间归属随账号转移，旧连接不触发离开逻辑
+      // 会话已被新连接顶替：房间归属随账号转移，旧连接不触发离开逻辑
+      if (io.sockets.adapter.rooms.has(userRoom)) return;
+      // 同一用户可能有多个连接各自触发 disconnect，只保留一个计时器
+      if (pendingLeaves.has(userId)) return;
+
+      const timer = setTimeout(() => {
+        pendingLeaves.delete(userId);
+        // 兜底：计时器到点时用户已重新连上（取消动作因竞态漏掉）
         if (io.sockets.adapter.rooms.has(userRoom)) return;
-        await service.disconnectLeave(userId);
-      });
+        void service.disconnectLeave(userId).catch((error: unknown) => {
+          fastify.log.error(
+            { error, userId },
+            'watch-room disconnect leave failed'
+          );
+        });
+      }, DISCONNECT_GRACE_MS);
+      // 宽限计时不阻止进程退出
+      timer.unref();
+      pendingLeaves.set(userId, timer);
     });
 
     /**
@@ -417,18 +477,27 @@ const registerWatchRoomSocket = async (fastify: FastifyInstance) => {
         service.controlPlayback(userId, roomId, 'seek', position)
     );
 
+    // 只读拉取（客户端周期校准）：不走 controlPlayback，不产生 revision 与广播
+    handle(
+      'playback:pull',
+      WatchRoomSocketRoomSchema,
+      actionLimiter,
+      ({ roomId }) => service.pullPlayback(userId, roomId)
+    );
+
     // 按当前会话角色过滤可切换的视频（无 adult 权限的房主不能切到 adult 视频）
     handle(
       'playback:change-video',
       WatchRoomSocketChangeVideoSchema,
       actionLimiter,
-      ({ roomId, videoId }, session) =>
+      ({ roomId, videoId, autoplay }, session) =>
         service.controlPlayback(
           userId,
           roomId,
           'change_video',
           videoId,
-          rbac.excludeTypesFor(session.role)
+          rbac.excludeTypesFor(session.role),
+          autoplay ?? false
         )
     );
 
@@ -448,6 +517,8 @@ const registerWatchRoomSocket = async (fastify: FastifyInstance) => {
   fastify.addHook('onClose', async () => {
     fastify.log.info('Closing Socket.IO server...');
     if (pruneTimer) clearInterval(pruneTimer);
+    for (const timer of pendingLeaves.values()) clearTimeout(timer);
+    pendingLeaves.clear();
     await new Promise<void>(resolve => io.close(() => resolve()));
     fastify.log.info('Socket.IO server closed');
   });

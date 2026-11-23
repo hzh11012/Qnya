@@ -5115,6 +5115,1347 @@
         }
       }
     },
+    "/api/admin/watch-room/{roomId}/members": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "roomId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number",
+                      "enum": [200]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "userId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "nickname": {
+                                "type": "string"
+                              },
+                              "avatar": {
+                                "nullable": true,
+                                "type": "string"
+                              },
+                              "role": {
+                                "type": "string",
+                                "enum": ["owner", "member"]
+                              },
+                              "joinedAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "userId",
+                              "nickname",
+                              "avatar",
+                              "role",
+                              "joinedAt"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "total": {
+                          "type": "number"
+                        }
+                      },
+                      "required": ["items", "total"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["code", "message", "data"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/watch-room/{roomId}/bans": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "roomId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number",
+                      "enum": [200]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "userId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "nickname": {
+                                "type": "string"
+                              },
+                              "avatar": {
+                                "nullable": true,
+                                "type": "string"
+                              },
+                              "bannedAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "userId",
+                              "nickname",
+                              "avatar",
+                              "bannedAt"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "total": {
+                          "type": "number"
+                        }
+                      },
+                      "required": ["items", "total"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["code", "message", "data"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/watch-room/{roomId}/bans/{userId}": {
+      "delete": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "roomId",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "userId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number",
+                      "enum": [200]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "roomId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "userId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        }
+                      },
+                      "required": ["roomId", "userId"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["code", "message", "data"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/watch-room/{roomId}/messages": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "default": 1,
+              "type": "number",
+              "minimum": 1
+            },
+            "in": "query",
+            "name": "page",
+            "required": false
+          },
+          {
+            "schema": {
+              "default": 10,
+              "type": "number",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "in": "query",
+            "name": "pageSize",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": ["chat", "system"]
+            },
+            "in": "query",
+            "name": "type",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "roomId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number",
+                      "enum": [200]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "messageId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "roomId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": ["chat", "system"]
+                              },
+                              "content": {
+                                "type": "string"
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "user": {
+                                "type": "object",
+                                "properties": {
+                                  "userId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  },
+                                  "nickname": {
+                                    "type": "string"
+                                  },
+                                  "avatar": {
+                                    "nullable": true,
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["userId", "nickname", "avatar"],
+                                "additionalProperties": false
+                              },
+                              "system": {
+                                "type": "object",
+                                "properties": {
+                                  "eventType": {
+                                    "type": "string",
+                                    "enum": [
+                                      "member_joined",
+                                      "member_left",
+                                      "member_kicked",
+                                      "room_updated",
+                                      "video_changed"
+                                    ]
+                                  },
+                                  "operator": {
+                                    "type": "object",
+                                    "properties": {
+                                      "userId": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                      },
+                                      "nickname": {
+                                        "type": "string"
+                                      },
+                                      "avatar": {
+                                        "nullable": true,
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "userId",
+                                      "nickname",
+                                      "avatar"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "target": {
+                                    "type": "object",
+                                    "properties": {
+                                      "userId": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                      },
+                                      "nickname": {
+                                        "type": "string"
+                                      },
+                                      "avatar": {
+                                        "nullable": true,
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "userId",
+                                      "nickname",
+                                      "avatar"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "required": ["eventType"],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "messageId",
+                              "roomId",
+                              "type",
+                              "content",
+                              "createdAt"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "total": {
+                          "type": "number"
+                        }
+                      },
+                      "required": ["items", "total"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["code", "message", "data"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "ROOM_NOT_FOUND",
+                        "ROOM_FULL",
+                        "ROOM_PRIVATE",
+                        "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
+                        "ROOM_PERMISSION_DENIED",
+                        "ROOM_MEMBER_NOT_FOUND",
+                        "VIDEO_NOT_FOUND",
+                        "VIDEO_UNAVAILABLE",
+                        "SESSION_INVALID",
+                        "RATE_LIMITED",
+                        "INVALID_PARAMS",
+                        "INTERNAL_ERROR"
+                      ]
+                    }
+                  },
+                  "required": ["code", "message"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/watch-room/{roomId}": {
       "patch": {
         "requestBody": {
@@ -5301,6 +6642,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -5338,6 +6680,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -5375,6 +6718,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -5412,6 +6756,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -5449,6 +6794,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -5486,6 +6832,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -5572,6 +6919,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -5609,6 +6957,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -5646,6 +6995,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -5683,6 +7033,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -5720,6 +7071,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -5757,6 +7109,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -9108,6 +10461,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -9145,6 +10499,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -9182,6 +10537,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -9219,6 +10575,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -9256,6 +10613,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -9293,6 +10651,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -9420,7 +10779,8 @@
                                       "member_joined",
                                       "member_left",
                                       "member_kicked",
-                                      "room_updated"
+                                      "room_updated",
+                                      "video_changed"
                                     ]
                                   },
                                   "operator": {
@@ -9518,6 +10878,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -9555,6 +10916,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -9592,6 +10954,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -9629,6 +10992,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -9666,6 +11030,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",
@@ -9703,6 +11068,7 @@
                         "ROOM_FULL",
                         "ROOM_PRIVATE",
                         "ROOM_PASSWORD_INVALID",
+                        "ROOM_BANNED",
                         "ROOM_PERMISSION_DENIED",
                         "ROOM_MEMBER_NOT_FOUND",
                         "VIDEO_NOT_FOUND",

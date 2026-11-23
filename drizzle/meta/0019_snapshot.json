@@ -1,5 +1,5 @@
 {
-  "id": "bddda04a-5576-4cc0-8da9-32678d50e747",
+  "id": "cc8c9572-0640-4975-a4f8-00569a300bce",
   "prevId": "60187d1f-f55a-4bad-a1cd-64580508500e",
   "version": "7",
   "dialect": "postgresql",
@@ -1628,8 +1628,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.watch_room_invites": {
-      "name": "watch_room_invites",
+    "public.watch_room_bans": {
+      "name": "watch_room_bans",
       "schema": "",
       "columns": {
         "id": {
@@ -1644,29 +1644,11 @@
           "primaryKey": false,
           "notNull": true
         },
-        "token_hash": {
-          "name": "token_hash",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_by": {
-          "name": "created_by",
+        "user_id": {
+          "name": "user_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
-        },
-        "revoked_at": {
-          "name": "revoked_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -1684,11 +1666,17 @@
         }
       },
       "indexes": {
-        "uq_watch_room_invites_token_hash": {
-          "name": "uq_watch_room_invites_token_hash",
+        "uq_watch_room_bans_room_user": {
+          "name": "uq_watch_room_bans_room_user",
           "columns": [
             {
-              "expression": "token_hash",
+              "expression": "room_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1698,38 +1686,23 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "watch_room_invites_room_idx": {
-          "name": "watch_room_invites_room_idx",
-          "columns": [
-            {
-              "expression": "room_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
-        "watch_room_invites_room_id_watch_rooms_id_fk": {
-          "name": "watch_room_invites_room_id_watch_rooms_id_fk",
-          "tableFrom": "watch_room_invites",
+        "watch_room_bans_room_id_watch_rooms_id_fk": {
+          "name": "watch_room_bans_room_id_watch_rooms_id_fk",
+          "tableFrom": "watch_room_bans",
           "tableTo": "watch_rooms",
           "columnsFrom": ["room_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "watch_room_invites_created_by_users_id_fk": {
-          "name": "watch_room_invites_created_by_users_id_fk",
-          "tableFrom": "watch_room_invites",
+        "watch_room_bans_user_id_users_id_fk": {
+          "name": "watch_room_bans_user_id_users_id_fk",
+          "tableFrom": "watch_room_bans",
           "tableTo": "users",
-          "columnsFrom": ["created_by"],
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -1771,21 +1744,6 @@
           "notNull": true,
           "default": "'member'"
         },
-        "status": {
-          "name": "status",
-          "type": "watch_room_member_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'active'"
-        },
-        "last_seen_at": {
-          "name": "last_seen_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1802,17 +1760,11 @@
         }
       },
       "indexes": {
-        "watch_room_members_room_status_idx": {
-          "name": "watch_room_members_room_status_idx",
+        "watch_room_members_room_idx": {
+          "name": "watch_room_members_room_idx",
           "columns": [
             {
               "expression": "room_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "status",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1823,8 +1775,8 @@
           "method": "btree",
           "with": {}
         },
-        "uq_watch_room_members_active_user": {
-          "name": "uq_watch_room_members_active_user",
+        "uq_watch_room_members_user": {
+          "name": "uq_watch_room_members_user",
           "columns": [
             {
               "expression": "user_id",
@@ -1834,7 +1786,6 @@
             }
           ],
           "isUnique": true,
-          "where": "status = 'active'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -2023,7 +1974,7 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "default": 20
+          "default": 5
         },
         "current_video_id": {
           "name": "current_video_id",
@@ -2198,11 +2149,6 @@
       "name": "watch_room_member_role",
       "schema": "public",
       "values": ["owner", "member"]
-    },
-    "public.watch_room_member_status": {
-      "name": "watch_room_member_status",
-      "schema": "public",
-      "values": ["active", "left", "kicked"]
     },
     "public.watch_room_message_type": {
       "name": "watch_room_message_type",

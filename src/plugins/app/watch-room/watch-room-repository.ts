@@ -22,6 +22,7 @@ import {
   videosTable,
   animeTable,
   watchRoomMembersTable,
+  watchRoomBansTable,
   watchRoomMessagesTable,
   watchRoomsTable,
   type AnimeType
@@ -54,7 +55,7 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
 
   /** 房间成员数子查询（大厅与管理端列表共用） */
   const memberCount = sql<number>`(
-    select count(*) from ${watchRoomMembersTable}
+    select count(*)::int from ${watchRoomMembersTable}
     where ${watchRoomMembersTable.roomId} = ${watchRoomsTable.id}
   )`;
 
@@ -73,15 +74,20 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
         visibility: 'public' | 'private';
         passwordHash: string | null;
         currentVideoId: string | null;
+        maxMembers: number;
       }
     ) {
       const [room] = await tx.insert(watchRoomsTable).values(data).returning();
       return room;
     },
 
-    /** 按 ID 查找房间 */
-    async findRoomById(roomId: string) {
-      const [room] = await db
+    /**
+     * 按 ID 查找房间。
+     * 只读场景（聊天/查询）传普通的 db 即可；已在事务里时传 tx，复用同一连接。
+     * 需要串行化的写操作请用 lockRoomById（行锁）。
+     */
+    async findRoomById(roomId: string, tx: DbExecutor = db) {
+      const [room] = await tx
         .select()
         .from(watchRoomsTable)
         .where(eq(watchRoomsTable.id, roomId))
@@ -121,7 +127,13 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
     async updateRoomInfo(
       tx: DbExecutor,
       roomId: string,
-      patch: Partial<{ name: string; announcement: string | null }>
+      patch: Partial<{
+        name: string;
+        announcement: string | null;
+        visibility: 'public' | 'private';
+        /** null = 清除密码（房间转为公开时） */
+        passwordHash: string | null;
+      }>
     ) {
       const [room] = await tx
         .update(watchRoomsTable)
@@ -198,7 +210,7 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
         db.select({ count: count() }).from(watchRoomsTable).where(whereClause)
       ]);
 
-      return { items, total: Number(countResult[0]?.count ?? 0) };
+      return { items, total: countResult[0]?.count ?? 0 };
     },
 
     /** 管理端房间列表（含私人房间，按房名或房主昵称搜索） */
@@ -265,7 +277,7 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
           .where(whereClause)
       ]);
 
-      return { items, total: Number(countResult[0]?.count ?? 0) };
+      return { items, total: countResult[0]?.count ?? 0 };
     },
 
     /** 硬删除房间（级联成员/消息） */
@@ -275,6 +287,19 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
         .where(eq(watchRoomsTable.id, roomId))
         .returning();
       return deleted ?? null;
+    },
+
+    /**
+     * 清空所有房间（级联成员/消息），返回删除数量。
+     *
+     * 房间的存在性依赖进程内的 Socket 连接：进程一重启，库里的房间就是死的，
+     * 却会继续出现在大厅列表里（点进去房主早没了）。启动时统一清掉。
+     */
+    async deleteAllRooms() {
+      const deleted = await db
+        .delete(watchRoomsTable)
+        .returning({ id: watchRoomsTable.id });
+      return deleted.length;
     },
 
     // ============================================
@@ -310,7 +335,7 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
         .select({ count: count() })
         .from(watchRoomMembersTable)
         .where(eq(watchRoomMembersTable.roomId, roomId));
-      return Number(result?.count ?? 0);
+      return result?.count ?? 0;
     },
 
     /** 房间成员列表（含用户昵称头像） */
@@ -353,6 +378,62 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
     },
 
     // ============================================
+    // 黑名单（被移出的成员）
+    // ============================================
+
+    /** 拉黑用户（重复移出幂等，不报唯一键冲突） */
+    async banMember(tx: DbExecutor, roomId: string, userId: string) {
+      await tx
+        .insert(watchRoomBansTable)
+        .values({ roomId, userId })
+        .onConflictDoNothing();
+    },
+
+    /** 黑名单列表（含被移出用户的昵称头像，按移出时间倒序） */
+    async findBans(roomId: string) {
+      return db
+        .select({
+          userId: watchRoomBansTable.userId,
+          nickname: usersTable.name,
+          avatar: usersTable.avatar,
+          bannedAt: watchRoomBansTable.createdAt
+        })
+        .from(watchRoomBansTable)
+        .innerJoin(usersTable, eq(watchRoomBansTable.userId, usersTable.id))
+        .where(eq(watchRoomBansTable.roomId, roomId))
+        .orderBy(desc(watchRoomBansTable.createdAt));
+    },
+
+    /** 解除拉黑；该用户本来不在黑名单时返回 null（调用方按幂等处理） */
+    async deleteBan(tx: DbExecutor, roomId: string, userId: string) {
+      const [row] = await tx
+        .delete(watchRoomBansTable)
+        .where(
+          and(
+            eq(watchRoomBansTable.roomId, roomId),
+            eq(watchRoomBansTable.userId, userId)
+          )
+        )
+        .returning();
+      return row ?? null;
+    },
+
+    /** 该用户是否已被这个房间拉黑 */
+    async isBanned(tx: DbExecutor, roomId: string, userId: string) {
+      const [row] = await tx
+        .select({ id: watchRoomBansTable.id })
+        .from(watchRoomBansTable)
+        .where(
+          and(
+            eq(watchRoomBansTable.roomId, roomId),
+            eq(watchRoomBansTable.userId, userId)
+          )
+        )
+        .limit(1);
+      return !!row;
+    },
+
+    // ============================================
     // 消息（聊天 + 系统通知）
     // ============================================
 
@@ -375,13 +456,28 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
       return message;
     },
 
-    /** 消息历史（分页，按时间倒序；聊天发送者信息在 metadata 中） */
-    async findMessages(roomId: string, page: number, pageSize: number) {
+    /**
+     * 消息历史（分页，按时间倒序；聊天发送者信息在 metadata 中）。
+     * type 供管理端单独筛聊天 / 系统通知，成员端不传即全部
+     */
+    async findMessages(
+      roomId: string,
+      page: number,
+      pageSize: number,
+      type?: 'chat' | 'system'
+    ) {
+      const whereClause = type
+        ? and(
+            eq(watchRoomMessagesTable.roomId, roomId),
+            eq(watchRoomMessagesTable.type, type)
+          )
+        : eq(watchRoomMessagesTable.roomId, roomId);
+
       const [items, countResult] = await Promise.all([
         db
           .select()
           .from(watchRoomMessagesTable)
-          .where(eq(watchRoomMessagesTable.roomId, roomId))
+          .where(whereClause)
           // id（uuidv7）作稳定 tiebreaker，同一时间戳的消息翻页不重复/不遗漏
           .orderBy(
             desc(watchRoomMessagesTable.createdAt),
@@ -392,10 +488,10 @@ const createWatchRoomRepository = (fastify: FastifyInstance) => {
         db
           .select({ count: count() })
           .from(watchRoomMessagesTable)
-          .where(eq(watchRoomMessagesTable.roomId, roomId))
+          .where(whereClause)
       ]);
 
-      return { items, total: Number(countResult[0]?.count ?? 0) };
+      return { items, total: countResult[0]?.count ?? 0 };
     },
 
     // ============================================

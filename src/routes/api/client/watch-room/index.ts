@@ -84,7 +84,7 @@ export default async function (fastify: FastifyInstance) {
     }
   );
 
-  /** 获取房间详情（私人房间对非成员等同不存在，防泄露） */
+  /** 获取房间详情（私人房间对非成员返回 403 ROOM_PRIVATE，与 room:join 一致） */
   fastify.get<{ Params: { roomId: string } }>(
     '/:roomId',
     {

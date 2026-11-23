@@ -13,7 +13,8 @@ export const WATCH_ROOM_EVENT_TYPES = [
   'member_joined',
   'member_left',
   'member_kicked',
-  'room_updated'
+  'room_updated',
+  'video_changed'
 ] as const;
 
 export type WatchRoomEventType = (typeof WATCH_ROOM_EVENT_TYPES)[number];
@@ -27,6 +28,7 @@ export const WATCH_ROOM_ERROR_CODES = [
   'ROOM_FULL',
   'ROOM_PRIVATE',
   'ROOM_PASSWORD_INVALID',
+  'ROOM_BANNED',
   'ROOM_PERMISSION_DENIED',
   'ROOM_MEMBER_NOT_FOUND',
   'VIDEO_NOT_FOUND',
@@ -45,6 +47,7 @@ export const WATCH_ROOM_ERROR_STATUS: Record<WatchRoomErrorCode, number> = {
   ROOM_FULL: 409,
   ROOM_PRIVATE: 403,
   ROOM_PASSWORD_INVALID: 403,
+  ROOM_BANNED: 403,
   ROOM_PERMISSION_DENIED: 403,
   ROOM_MEMBER_NOT_FOUND: 404,
   VIDEO_NOT_FOUND: 404,
@@ -103,7 +106,7 @@ export const WatchRoomCreateSchema = z.object({
 
 export type WatchRoomCreateInput = z.infer<typeof WatchRoomCreateSchema>;
 
-/** 公开房间列表查询（按创建时间倒序分页） */
+/** 公开房间列表查询（按开播时间倒序分页） */
 export const WatchRoomListQuerySchema = z.object({
   ...PaginationQuerySchema
 });
@@ -118,8 +121,8 @@ export const WatchRoomJoinSchema = z.object({
 
 export type WatchRoomJoinInput = z.infer<typeof WatchRoomJoinSchema>;
 
-/** 修改房间信息字段（HTTP 与 Socket 共用） */
-const WatchRoomUpdateShape = {
+/** 房间基本信息字段（名称/公告，房主与管理端共用） */
+const WatchRoomInfoShape = {
   name: z
     .string()
     .trim()
@@ -129,13 +132,32 @@ const WatchRoomUpdateShape = {
   announcement: z.string().trim().max(500, '公告最多 500 字').optional()
 };
 
-const hasUpdateField = (data: { name?: string; announcement?: string }) =>
+type WatchRoomInfoPatch = { name?: string; announcement?: string };
+
+const hasInfoField = (data: WatchRoomInfoPatch) =>
   data.name !== undefined || data.announcement !== undefined;
 
-/** 修改房间信息（房主） */
+/** 修改房间信息（房主）：名称/公告/公开状态，转私人时同时给出密码 */
 export const WatchRoomUpdateSchema = z
-  .object(WatchRoomUpdateShape)
-  .refine(hasUpdateField, { message: '至少修改一项内容' });
+  .object({
+    ...WatchRoomInfoShape,
+    visibility: WatchRoomVisibilitySchema.optional(),
+    /** 转为私人房间时设置的密码（房间已是私人且已设过密码时可省略） */
+    password: z
+      .string()
+      .min(4, '密码至少 4 位')
+      .max(32, '密码最多 32 位')
+      .optional()
+  })
+  .refine(data => hasInfoField(data) || data.visibility !== undefined, {
+    message: '至少修改一项内容'
+  })
+  .refine(
+    data => data.password === undefined || data.visibility === 'private',
+    {
+      message: '密码只能随私人房间设置'
+    }
+  );
 
 export type WatchRoomUpdateInput = z.infer<typeof WatchRoomUpdateSchema>;
 
@@ -176,14 +198,20 @@ export const WatchRoomSocketRoomSchema = z.object(SocketRoomIdShape);
 export const WatchRoomSocketJoinSchema =
   WatchRoomJoinSchema.extend(SocketRoomIdShape);
 
-/** room:leave：roomId 可选（不传 = 离开当前所在房间） */
+/**
+ * room:leave：必须带 roomId。
+ *
+ * 不带 roomId 时服务端会退出「当前所在房间」——旧标签页发一条裸 leave 就能把
+ * 用户刚切换过去的新房间（房主即解散）误关掉，因此这里强制指定房间。
+ * 登出等「退出当前房间」场景走 service.leaveRoom(userId) 的内部调用，不经过这里。
+ */
 export const WatchRoomSocketLeaveSchema = z.object({
-  roomId: IdSchema.optional()
+  roomId: IdSchema
 });
 
-export const WatchRoomSocketUpdateSchema = z
-  .object({ ...SocketRoomIdShape, ...WatchRoomUpdateShape })
-  .refine(hasUpdateField, { message: '至少修改一项内容' });
+/** room:update：roomId + 房主可改的字段（保留 WatchRoomUpdateSchema 的约束） */
+export const WatchRoomSocketUpdateSchema =
+  WatchRoomUpdateSchema.safeExtend(SocketRoomIdShape);
 
 export const WatchRoomSocketKickSchema =
   WatchRoomKickSchema.extend(SocketRoomIdShape);
@@ -201,7 +229,9 @@ export const WatchRoomSocketSeekSchema = z.object({
 
 export const WatchRoomSocketChangeVideoSchema = z.object({
   ...SocketRoomIdShape,
-  videoId: IdSchema
+  videoId: IdSchema,
+  /** 换集后直接从 0 起播（自动连播用）；手动选集不传，保持「切完暂停」 */
+  autoplay: z.boolean().optional()
 });
 
 export const WatchRoomSocketChatSchema =
@@ -352,5 +382,38 @@ export type AdminWatchRoomListItem = z.infer<
   typeof AdminWatchRoomListItemSchema
 >;
 
-/** 管理端编辑房间（复用客户端 Update 的约束：至少修改一项） */
-export const AdminWatchRoomUpdateSchema = WatchRoomUpdateSchema;
+/** 管理端编辑房间（只改名称/公告，公开状态与密码归房主） */
+export const AdminWatchRoomUpdateSchema = z
+  .object(WatchRoomInfoShape)
+  .refine(hasInfoField, { message: '至少修改一项内容' });
+
+/** 管理端房间成员（只读：单会话模型下在房成员即在线成员） */
+export const AdminWatchRoomMemberSchema = z.object({
+  userId: IdSchema,
+  nickname: z.string(),
+  avatar: z.string().nullable(),
+  role: z.enum(['owner', 'member']),
+  joinedAt: z.date()
+});
+
+export type AdminWatchRoomMember = z.infer<typeof AdminWatchRoomMemberSchema>;
+
+/** 管理端黑名单条目（被房主移出、当前无法再加入该房间的用户） */
+export const AdminWatchRoomBanSchema = z.object({
+  userId: IdSchema,
+  nickname: z.string(),
+  avatar: z.string().nullable(),
+  bannedAt: z.date()
+});
+
+export type AdminWatchRoomBan = z.infer<typeof AdminWatchRoomBanSchema>;
+
+/** 管理端消息记录查询：可按类型筛选（chat / system） */
+export const AdminWatchRoomMessageQuerySchema = z.object({
+  ...PaginationQuerySchema,
+  type: z.enum(['chat', 'system']).optional()
+});
+
+export type AdminWatchRoomMessageQuery = z.infer<
+  typeof AdminWatchRoomMessageQuerySchema
+>;
