@@ -37,7 +37,7 @@ PostgreSQL ｜ Redis(session/缓存/验证码) ｜ qBittorrent ｜ SMTP ｜ TMDB
 | `premium` | user 全部能力 + 成人内容可见           |
 | `admin`   | 全部能力 + 管理后台                    |
 
-- 除少数可选会话接口外，接口默认需登录（未登录 401）；权限不足返回 403。
+- 除登录/发码、健康检查、webhook、MCP 外，接口默认需登录（未登录 401）；权限不足返回 403。
 - 成人内容（里番类型/工口等标签）按角色过滤，接口层通过 `rbac.filterAdultTypes()` 统一注入 `excludeTypes`。
 
 ## 接口概览
@@ -74,16 +74,20 @@ OpenAPI 文档仅在开发环境暴露（swagger-ui），可通过 `pnpm openapi
 
 ```
 src/
-├── bootstrap/        # 启动编排（插件注册、种子）
-├── config/           # 常量配置
+├── index.ts          # 进程入口（DNS 解析顺序、优雅关闭、listen）
+├── bootstrap/        # 启动前置动作（Windows 控制台 UTF-8）
+├── config/           # buildApp：autoload 顺序 external → app → routes
 ├── db/               # Drizzle 表定义（按域分目录）+ 迁移在 drizzle/
 ├── plugins/
-│   ├── app/          # 领域层：*-repository、rbac、搜索、下载器、推荐、任务
+│   ├── app/          # 领域层：*-repository、rbac、搜索、下载器、推荐、放映室
+│   │                 #   领域内部实现模块放 <domain>/internal/（非插件）
 │   └── external/     # 基础设施：db/redis/meilisearch/env/security 系列
-├── routes/api/       # 路由（auth/client/admin/mcp/webhook/health）
+├── routes/api/       # 路由（admin/client/auth/app/media/mcp/webhook/health），目录名即 URL 前缀
 ├── schemas/          # zod schema（路由校验的唯一来源）
 └── utils/            # 分页、繁简转换、like 转义等工具
 ```
+
+各层职责与"新领域该把文件放哪"见 [AGENTS.md](./AGENTS.md#架构三层)。
 
 ## 快速开始
 

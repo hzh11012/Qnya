@@ -40,9 +40,13 @@ yarn-error.log*
 # Sentry Config File
 .env.sentry-build-plugin
 
-# Claude
+# 本地工具目录（AI 助手工作区、编辑器配置）
 .claude
+.workbuddy
 *.tsbuildinfo
+
+# docker-compose 的本地数据目录兜底（QBIT_DATA_PATH 默认 ./data/qbit）
+/data/
 
 # 本地生成的文档，不入库
 /docs/
