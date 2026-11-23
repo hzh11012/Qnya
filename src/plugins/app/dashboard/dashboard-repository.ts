@@ -77,61 +77,77 @@ const createDashboardRepository = (fastify: FastifyInstance) => {
           meiliStatus
         ] = await Promise.all([
           // 番剧总数
-          db.select({ count: sql<number>`count(*)` }).from(animeTable),
+          db.select({ count: sql<number>`count(*)::int` }).from(animeTable),
           // 番剧各状态数
           db
             .select({
               status: animeTable.status,
-              count: sql<number>`count(*)`
+              count: sql<number>`count(*)::int`
             })
             .from(animeTable)
             .groupBy(animeTable.status),
           // 番剧各类型数
           db
-            .select({ type: animeTable.type, count: sql<number>`count(*)` })
+            .select({
+              type: animeTable.type,
+              count: sql<number>`count(*)::int`
+            })
             .from(animeTable)
             .groupBy(animeTable.type),
           // 视频总数
-          db.select({ videoTotal: sql<number>`count(*)` }).from(videosTable),
+          db
+            .select({ videoTotal: sql<number>`count(*)::int` })
+            .from(videosTable),
           // 系列总数
-          db.select({ seriesTotal: sql<number>`count(*)` }).from(seriesTable),
+          db
+            .select({ seriesTotal: sql<number>`count(*)::int` })
+            .from(seriesTable),
           // 专题总数
-          db.select({ topicTotal: sql<number>`count(*)` }).from(topicsTable),
+          db
+            .select({ topicTotal: sql<number>`count(*)::int` })
+            .from(topicsTable),
           // 用户总数
-          db.select({ userTotal: sql<number>`count(*)` }).from(usersTable),
+          db.select({ userTotal: sql<number>`count(*)::int` }).from(usersTable),
           // 活跃用户
           db
-            .select({ activeUsers: sql<number>`count(*)` })
+            .select({ activeUsers: sql<number>`count(*)::int` })
             .from(usersTable)
             .where(eq(usersTable.status, true)),
           // 用户各角色数
           db
-            .select({ role: usersTable.role, count: sql<number>`count(*)` })
+            .select({
+              role: usersTable.role,
+              count: sql<number>`count(*)::int`
+            })
             .from(usersTable)
             .groupBy(usersTable.role),
           // 弹幕总数
-          db.select({ danmakuTotal: sql<number>`count(*)` }).from(danmakuTable),
+          db
+            .select({ danmakuTotal: sql<number>`count(*)::int` })
+            .from(danmakuTable),
           // 观看记录总数
           db
-            .select({ historyTotal: sql<number>`count(*)` })
+            .select({ historyTotal: sql<number>`count(*)::int` })
             .from(historiesTable),
           // 追番总数
           db
-            .select({ collectionTotal: sql<number>`count(*)` })
+            .select({ collectionTotal: sql<number>`count(*)::int` })
             .from(collectionsTable),
           // 评分总数
-          db.select({ scoreTotal: sql<number>`count(*)` }).from(scoresTable),
+          db
+            .select({ scoreTotal: sql<number>`count(*)::int` })
+            .from(scoresTable),
           // 任务各状态数
           db
             .select({
               status: tasksTable.status,
-              count: sql<number>`count(*)`
+              count: sql<number>`count(*)::int`
             })
             .from(tasksTable)
             .groupBy(tasksTable.status),
           // 待处理反馈数
           db
-            .select({ pendingFeedbacks: sql<number>`count(*)` })
+            .select({ pendingFeedbacks: sql<number>`count(*)::int` })
             .from(feedbackTable)
             .where(eq(feedbackTable.status, 'pending')),
           // 追番排行 Top 10
@@ -140,7 +156,7 @@ const createDashboardRepository = (fastify: FastifyInstance) => {
               animeId: collectionsTable.animeId,
               animeName: animeTable.name,
               cover: animeTable.cover,
-              count: sql<number>`count(*)`
+              count: sql<number>`count(*)::int`
             })
             .from(collectionsTable)
             .innerJoin(animeTable, eq(collectionsTable.animeId, animeTable.id))

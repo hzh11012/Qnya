@@ -36,9 +36,11 @@ const createRecommendRepository = (fastify: FastifyInstance) => {
     async getStatus() {
       const [lastRefreshedAt, affinity, anime] = await Promise.all([
         this.getLastRefreshedAt(),
-        db.select({ count: sql<number>`count(*)` }).from(animeAffinityTable),
         db
-          .select({ count: sql<number>`count(*)` })
+          .select({ count: sql<number>`count(*)::int` })
+          .from(animeAffinityTable),
+        db
+          .select({ count: sql<number>`count(*)::int` })
           .from(animeTable)
           .where(notInArray(animeTable.status, ['draft']))
       ]);

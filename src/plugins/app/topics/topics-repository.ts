@@ -61,7 +61,7 @@ const createTopicsRepository = (fastify: FastifyInstance) => {
           .limit(pageSize)
           .offset(calcOffset(page, pageSize)),
         db
-          .select({ count: sql<number>`count(*)` })
+          .select({ count: sql<number>`count(*)::int` })
           .from(topicsTable)
           .where(whereClause)
       ]);
@@ -101,7 +101,7 @@ const createTopicsRepository = (fastify: FastifyInstance) => {
           ...t,
           anime: animeByTopic.get(t.id) ?? []
         })),
-        total: Number(countResult[0]?.count ?? 0)
+        total: countResult[0]?.count ?? 0
       };
     },
 
@@ -198,7 +198,7 @@ const createTopicsRepository = (fastify: FastifyInstance) => {
           .limit(pageSize)
           .offset(calcOffset(page, pageSize)),
         db
-          .select({ count: sql<number>`count(*)` })
+          .select({ count: sql<number>`count(*)::int` })
           .from(topicsTable)
           .where(where)
       ]);
@@ -271,7 +271,7 @@ const createTopicsRepository = (fastify: FastifyInstance) => {
           covers: coversByTopic.get(t.id) ?? [],
           watchedCount: watchedByTopic.get(t.id) ?? 0
         })),
-        total: Number(countResult[0]?.count ?? 0)
+        total: countResult[0]?.count ?? 0
       };
     },
 

@@ -273,10 +273,10 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
     /** 可被搜索的番剧数量（非草稿，用于启动时校验索引一致性） */
     async countPublishable() {
       const [result] = await db
-        .select({ count: sql<number>`count(*)` })
+        .select({ count: sql<number>`count(*)::int` })
         .from(animeTable)
         .where(notInArray(animeTable.status, ['draft']));
-      return Number(result?.count ?? 0);
+      return result?.count ?? 0;
     },
 
     /** 按 ID 游标分批获取搜索索引文档（仅非草稿，供全量重建灌入 meilisearch） */
@@ -381,7 +381,7 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
               .where(inArray(animeToTagsTable.animeId, animeIds))
           : [],
         db
-          .select({ count: sql<number>`count(*)` })
+          .select({ count: sql<number>`count(*)::int` })
           .from(animeTable)
           .where(whereClause)
       ]);
@@ -398,7 +398,7 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
           ...a,
           tags: tagsByAnime.get(a.id) ?? []
         })),
-        total: Number(countResult[0]?.count ?? 0)
+        total: countResult[0]?.count ?? 0
       };
     },
 
@@ -503,13 +503,13 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
           .limit(pageSize)
           .offset(calcOffset(page, pageSize)),
         db
-          .select({ count: sql<number>`count(*)` })
+          .select({ count: sql<number>`count(*)::int` })
           .from(animeTable)
           .where(whereClause)
       ]);
 
       const items = await attachMeta(rows);
-      return { items, total: Number(countResult[0]?.count ?? 0) };
+      return { items, total: countResult[0]?.count ?? 0 };
     },
 
     /**
@@ -612,10 +612,10 @@ const createAnimeRepository = (fastify: FastifyInstance) => {
 
       // count 沿用原查询条件（与排序无关）
       const countResult = await db
-        .select({ count: sql<number>`count(*)` })
+        .select({ count: sql<number>`count(*)::int` })
         .from(animeTable)
         .where(whereClause);
-      return { items, total: Number(countResult[0]?.count ?? 0) };
+      return { items, total: countResult[0]?.count ?? 0 };
     },
 
     /** 查询番剧选项 */

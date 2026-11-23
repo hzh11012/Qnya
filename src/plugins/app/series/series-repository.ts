@@ -64,7 +64,7 @@ const createSeriesRepository = (fastify: FastifyInstance) => {
           .limit(pageSize)
           .offset(calcOffset(page, pageSize)),
         db
-          .select({ count: sql<number>`count(*)` })
+          .select({ count: sql<number>`count(*)::int` })
           .from(seriesTable)
           .where(whereClause)
       ]);
@@ -96,7 +96,7 @@ const createSeriesRepository = (fastify: FastifyInstance) => {
           ...s,
           anime: animeBySeries.get(s.id) ?? []
         })),
-        total: Number(countResult[0]?.count ?? 0)
+        total: countResult[0]?.count ?? 0
       };
     },
 

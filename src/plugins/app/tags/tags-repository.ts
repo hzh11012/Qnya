@@ -62,12 +62,12 @@ const createTagsRepository = (fastify: FastifyInstance) => {
           .limit(pageSize)
           .offset(calcOffset(page, pageSize)),
         db
-          .select({ count: sql<number>`count(*)` })
+          .select({ count: sql<number>`count(*)::int` })
           .from(tagsTable)
           .where(whereClause)
       ]);
 
-      return { items, total: Number(countResult[0]?.count ?? 0) };
+      return { items, total: countResult[0]?.count ?? 0 };
     },
 
     /** 查询选项 */

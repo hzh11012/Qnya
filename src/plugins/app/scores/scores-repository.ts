@@ -69,7 +69,7 @@ const createScoresRepository = (fastify: FastifyInstance) => {
           .limit(pageSize)
           .offset(calcOffset(page, pageSize)),
         db
-          .select({ count: sql<number>`count(*)` })
+          .select({ count: sql<number>`count(*)::int` })
           .from(scoresTable)
           .where(whereClause)
       ]);
@@ -80,7 +80,7 @@ const createScoresRepository = (fastify: FastifyInstance) => {
           user: { name: userName },
           anime: { name: animeName, cover: animeCover }
         })),
-        total: Number(countResult[0]?.count ?? 0)
+        total: countResult[0]?.count ?? 0
       };
     },
 

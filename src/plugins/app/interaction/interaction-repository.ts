@@ -16,6 +16,7 @@ import {
 } from '../../../schemas/play.js';
 import { buildSeasonSuffix } from '../../../utils/season.js';
 import { syncAnimeScore } from '../../../utils/anime-score.js';
+import { escapeLike } from '../../../utils/like.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -186,7 +187,7 @@ const createInteractionRepository = (fastify: FastifyInstance) => {
           .limit(pageSize)
           .offset((page - 1) * pageSize),
         db
-          .select({ count: sql<number>`count(*)` })
+          .select({ count: sql<number>`count(*)::int` })
           .from(collectionsTable)
           .where(where)
       ]);
@@ -205,7 +206,7 @@ const createInteractionRepository = (fastify: FastifyInstance) => {
           videoId: videoStats.get(row.animeId)?.firstId ?? null,
           collectedAt: row.collectedAt
         })),
-        total: Number(countResult[0]?.count ?? 0)
+        total: countResult[0]?.count ?? 0
       };
     },
 
@@ -218,7 +219,7 @@ const createInteractionRepository = (fastify: FastifyInstance) => {
     ) {
       const eqUser = eq(historiesTable.userId, userId);
       // LIKE 通配符转义，避免用户输入 % / _ 影响匹配范围
-      const escaped = keyword?.replace(/[\\%_]/g, '\\$&');
+      const escaped = keyword ? escapeLike(keyword) : undefined;
       const where = escaped
         ? and(eqUser, ilike(animeTable.name, `%${escaped}%`))
         : eqUser;
@@ -247,7 +248,7 @@ const createInteractionRepository = (fastify: FastifyInstance) => {
         // keyword 过滤引用了 anime 表，计数查询必须带相同的 join
         escaped
           ? db
-              .select({ count: sql<number>`count(*)` })
+              .select({ count: sql<number>`count(*)::int` })
               .from(historiesTable)
               .innerJoin(
                 videosTable,
@@ -256,7 +257,7 @@ const createInteractionRepository = (fastify: FastifyInstance) => {
               .innerJoin(animeTable, eq(videosTable.animeId, animeTable.id))
               .where(where)
           : db
-              .select({ count: sql<number>`count(*)` })
+              .select({ count: sql<number>`count(*)::int` })
               .from(historiesTable)
               .where(where)
       ]);
@@ -272,7 +273,7 @@ const createInteractionRepository = (fastify: FastifyInstance) => {
           time: row.time,
           watchedAt: row.watchedAt
         })),
-        total: Number(countResult[0]?.count ?? 0)
+        total: countResult[0]?.count ?? 0
       };
     }
   };
